@@ -24,6 +24,12 @@ interface Props {
   defaultDate: string;
   defaultProject?: string;
   lockProject?: string;
+  /**
+   * Fixes the entry to a project or a task and hides the toggle. Used by the
+   * "New task" button, where the choice was already made by which button was
+   * pressed.
+   */
+  lockWorkType?: WorkType;
 }
 
 export function TimeEntryModal({
@@ -36,6 +42,7 @@ export function TimeEntryModal({
   defaultDate,
   defaultProject,
   lockProject,
+  lockWorkType,
 }: Props) {
   const toast = useToast();
   const [userId, setUserId] = useState(currentUser.id);
@@ -68,11 +75,12 @@ export function TimeEntryModal({
       setHours("0");
       setMinutes("0");
       setNote("");
-      // A form opened from a project page is project work by definition.
-      setWorkType("project");
+      // A form opened from a project page is project work by definition; one
+      // opened by "New task" is a task.
+      setWorkType(lockWorkType ?? "project");
     }
     setError(null);
-  }, [editingEntry, open, currentUser.id, defaultDate, defaultProject, lockProject]);
+  }, [editingEntry, open, currentUser.id, defaultDate, defaultProject, lockProject, lockWorkType]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -158,10 +166,10 @@ export function TimeEntryModal({
           </div>
         )}
 
-        {/* Hidden when the form is opened from a project page — that entry is
-            against this project by definition, so offering "Task" would be a
-            choice the form can't honour. */}
-        {!lockProject && (
+        {/* Hidden when the form is opened from a project page, or by a button
+            that already said which kind this is — offering the choice again
+            would be a control that can't change anything. */}
+        {!lockProject && !lockWorkType && (
           <div>
             <Label>Logged against</Label>
             <WorkTypeToggle value={workType} onChange={setWorkType} />

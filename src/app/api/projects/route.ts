@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { notify } from "@/lib/notifications";
+import { hasWorkType } from "@/lib/schemaSupport";
 
 // Distinct project names across every place a project can be named, so
 // pickers (e.g. the update/timer/project-assignment forms) can suggest
@@ -20,21 +21,34 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [{ data: dailyUpdates }, { data: timeEntries }, { data: memberProjects }, { data: projectSettings }] =
-    await Promise.all([
-      supabase.from("daily_updates").select("project, work_type"),
-      supabase.from("time_entries").select("project, work_type"),
-      supabase.from("member_projects").select("project"),
-      supabase.from("project_settings").select("project"),
-    ]);
+  // `work_type` only exists after migration 040; asking for it before then makes
+  // the whole select fail, which would empty every project picker in the app.
+  // Two literal selects rather than one built from a variable — the Supabase
+  // client parses the column list at the type level, so it can't be dynamic.
+  const workTypeReady = await hasWorkType(supabase);
+
+  type LogRow = { project: string; work_type?: string };
+  const logNames = async (table: "daily_updates" | "time_entries"): Promise<LogRow[]> => {
+    const { data } = workTypeReady
+      ? await supabase.from(table).select("project, work_type")
+      : await supabase.from(table).select("project");
+    return (data || []) as LogRow[];
+  };
+
+  const [dailyUpdates, timeEntries, { data: memberProjects }, { data: projectSettings }] = await Promise.all([
+    logNames("daily_updates"),
+    logNames("time_entries"),
+    supabase.from("member_projects").select("project"),
+    supabase.from("project_settings").select("project"),
+  ]);
 
   const names = new Set<string>();
   const taskNames = new Set<string>();
 
-  for (const row of [...(dailyUpdates || []), ...(timeEntries || [])]) {
+  for (const row of [...dailyUpdates, ...timeEntries]) {
     // `work_type` is undefined until migration 040 runs; treat that as project
     // work, which is what every existing row is.
-    if ((row as { work_type?: string }).work_type === "task") taskNames.add(row.project);
+    if (row.work_type === "task") taskNames.add(row.project);
     else names.add(row.project);
   }
   for (const row of [...(memberProjects || []), ...(projectSettings || [])]) {

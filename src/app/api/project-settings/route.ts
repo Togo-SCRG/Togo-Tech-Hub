@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { hasSideNote } from "@/lib/schemaSupport";
 
 function toCamel(data: {
   project: string;
@@ -37,9 +38,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "project is required." }, { status: 400 });
   }
 
+  // `*` rather than a column list: naming side_note here made this endpoint fail
+  // outright before migration 039 was run, which took the weekly hour cap, the
+  // timeline and the overview down with it. With `*` a column that isn't there
+  // yet simply comes back undefined.
   const { data, error } = await supabase
     .from("project_settings")
-    .select("project, weekly_hour_cap, overview, prd, timeline, status, side_note")
+    .select("*")
     .eq("project", project)
     .maybeSingle();
 
@@ -84,12 +89,22 @@ export async function PATCH(req: NextRequest) {
   if (prd !== undefined) upsertData.prd = prd;
   if (timeline !== undefined) upsertData.timeline = timeline;
   if (status !== undefined) upsertData.status = status;
-  if (sideNote !== undefined) upsertData.side_note = sideNote;
+  if (sideNote !== undefined) {
+    // Reported rather than silently dropped: someone who typed a note and saw
+    // "Saved" would reasonably assume it was stored.
+    if (!(await hasSideNote(supabase))) {
+      return NextResponse.json(
+        { error: "Side notes aren't set up yet — run migration 039 in Supabase." },
+        { status: 400 }
+      );
+    }
+    upsertData.side_note = sideNote;
+  }
 
   const { data, error } = await supabase
     .from("project_settings")
     .upsert(upsertData, { onConflict: "project" })
-    .select("project, weekly_hour_cap, overview, prd, timeline, status, side_note")
+    .select("*")
     .single();
 
   if (error) {

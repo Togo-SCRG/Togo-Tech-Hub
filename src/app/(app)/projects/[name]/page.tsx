@@ -16,6 +16,7 @@ import { DeleteProjectButton } from "@/components/projects/DeleteProjectButton";
 import { formatDateShort, formatMinutes, getWeekRange } from "@/lib/utils";
 import { fetchProjectBlockers } from "@/lib/projectBlockers";
 import { isRealBlocker } from "@/lib/blockers";
+import { hasWorkType, onlyProjectWork } from "@/lib/schemaSupport";
 
 export default async function ProjectDetailPage({ params }: { params: { name: string } }) {
   const projectName = decodeURIComponent(params.name);
@@ -27,6 +28,10 @@ export default async function ProjectDetailPage({ params }: { params: { name: st
     data: { user: viewer },
   } = await supabase.auth.getUser();
   const viewerId = viewer?.id ?? null;
+
+  // Migration 040 may not have run yet, in which case there's no work_type to
+  // filter on and every row is project work — which is what it was before 040.
+  const workTypeReady = await hasWorkType(supabase);
 
   const [
     { data: memberProjects },
@@ -42,26 +47,31 @@ export default async function ProjectDetailPage({ params }: { params: { name: st
       // work_type filters throughout: a task can share a name with a project
       // without being one, and its rows must not appear on the project's page,
       // its team, its hours or its activity feed.
-      supabase
-        .from("daily_updates")
-        .select("*, profiles(id, name, avatar_url, role)")
-        .eq("project", projectName)
-        .eq("work_type", "project")
-        .order("date", { ascending: false }),
+      onlyProjectWork(
+        supabase
+          .from("daily_updates")
+          .select("*, profiles(id, name, avatar_url, role)")
+          .eq("project", projectName),
+        workTypeReady
+      ).order("date", { ascending: false }),
       // Joined to profiles and carrying phase/note so the activity feed can
       // show "Ed logged 2h on Dev" alongside the daily updates.
-      supabase
-        .from("time_entries")
-        .select("id, user_id, duration_minutes, date, phase, note, created_at, profiles(name)")
-        .eq("project", projectName)
-        .eq("work_type", "project")
-        .order("date", { ascending: false }),
+      onlyProjectWork(
+        supabase
+          .from("time_entries")
+          .select("id, user_id, duration_minutes, date, phase, note, created_at, profiles(name)")
+          .eq("project", projectName),
+        workTypeReady
+      ).order("date", { ascending: false }),
       // Overview/PRD/cap are selected here too so those sections render with
       // their real content on first paint instead of fetching it again
       // client-side and shifting the layout when it lands.
       supabase
         .from("project_settings")
-        .select("project, status, overview, prd, timeline, weekly_hour_cap, side_note")
+        // `*`, not a column list: naming side_note here made the whole select
+        // fail before migration 039 was run, so the page rendered with no
+        // overview, no timeline and no cap — none of which were missing.
+        .select("*")
         .eq("project", projectName)
         .maybeSingle(),
       // Blockers raised against the project itself, rather than carried on a

@@ -6,6 +6,7 @@ import { ensureMemberProject } from "@/lib/memberProjects";
 import { notify } from "@/lib/notifications";
 import { syncProjectStatus } from "@/lib/syncProjectStatus";
 import { normaliseWorkType } from "@/lib/workType";
+import { hasWorkType } from "@/lib/schemaSupport";
 
 function toCamel(row: any) {
   return {
@@ -100,6 +101,17 @@ export async function POST(req: NextRequest) {
   const workType = normaliseWorkType(body.workType);
   const isTaskEntry = workType === "task";
 
+  // Before migration 040 the column doesn't exist. Logging normal project work
+  // must keep working regardless — only an actual task is refused, and it says
+  // why rather than failing on a raw Postgres error.
+  const workTypeReady = await hasWorkType(supabase);
+  if (isTaskEntry && !workTypeReady) {
+    return NextResponse.json(
+      { error: "Tasks aren't set up yet — run migration 040 in Supabase." },
+      { status: 400 }
+    );
+  }
+
   if (!project || !date) {
     return NextResponse.json(
       { error: `${isTaskEntry ? "Task" : "Project"} and date are required.` },
@@ -120,7 +132,7 @@ export async function POST(req: NextRequest) {
       user_id: userId || user.id,
       date,
       project,
-      work_type: workType,
+      ...(workTypeReady ? { work_type: workType } : {}),
       update: update || "",
       whats_left: whatsLeft || "",
       timeline: timeline || "",

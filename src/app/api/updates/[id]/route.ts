@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { syncProjectStatus } from "@/lib/syncProjectStatus";
 import { normaliseWorkType } from "@/lib/workType";
+import { hasWorkType } from "@/lib/schemaSupport";
 
 function toCamel(row: any) {
   return {
@@ -39,7 +40,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const data: Record<string, unknown> = {};
   if (date !== undefined) data.date = date;
   if (project !== undefined) data.project = project;
-  if (workType !== undefined) data.work_type = normaliseWorkType(workType);
+  // Skipped rather than failing the whole edit before migration 040 — every row
+  // is project work then anyway, so there's nothing to change it to.
+  if (workType !== undefined && (await hasWorkType(supabase))) {
+    data.work_type = normaliseWorkType(workType);
+  }
   if (update !== undefined) data.update = update;
   if (whatsLeft !== undefined) data.whats_left = whatsLeft;
   if (timeline !== undefined) data.timeline = timeline;

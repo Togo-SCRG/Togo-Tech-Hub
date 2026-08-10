@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { ensureMemberProject } from "@/lib/memberProjects";
 import { normaliseWorkType } from "@/lib/workType";
+import { hasWorkType } from "@/lib/schemaSupport";
 
 function toCamel(row: any) {
   return {
@@ -71,6 +72,16 @@ export async function POST(req: NextRequest) {
   const { userId, project, phase, date, durationMinutes, note } = body;
   const workType = normaliseWorkType(body.workType);
 
+  // See the same guard in /api/updates: project work keeps working before
+  // migration 040, and only an actual task is refused, with a reason.
+  const workTypeReady = await hasWorkType(supabase);
+  if (workType === "task" && !workTypeReady) {
+    return NextResponse.json(
+      { error: "Tasks aren't set up yet — run migration 040 in Supabase." },
+      { status: 400 }
+    );
+  }
+
   if (!project || !date || !durationMinutes) {
     return NextResponse.json(
       { error: `${workType === "task" ? "Task" : "Project"}, date, and duration are required.` },
@@ -83,7 +94,7 @@ export async function POST(req: NextRequest) {
     .insert({
       user_id: userId || user.id,
       project,
-      work_type: workType,
+      ...(workTypeReady ? { work_type: workType } : {}),
       phase: phase || "",
       date,
       duration_minutes: durationMinutes,

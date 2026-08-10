@@ -27,7 +27,16 @@ const STATUS_VERB: Record<string, string> = {
  * these two streams separately made it hard to reconstruct what actually
  * happened on a given day.
  */
-export function ProjectActivityFeed({ events, total }: { events: ActivityEvent[]; total: number }) {
+export function ProjectActivityFeed({
+  events,
+  total,
+  subject = "project",
+}: {
+  events: ActivityEvent[];
+  total: number;
+  /** What the entries are attached to, so the same feed reads correctly on a task. */
+  subject?: "project" | "task";
+}) {
   return (
     <section className="overflow-hidden rounded-md border border-togo-border bg-togo-surface">
       <div className="flex items-center gap-2 border-b border-togo-border px-4 py-3">
@@ -39,7 +48,7 @@ export function ProjectActivityFeed({ events, total }: { events: ActivityEvent[]
 
       {events.length === 0 ? (
         <p className="px-4 py-5 text-xs text-togo-muted">
-          Nothing logged against this project yet. Updates and tracked time both show up here.
+          Nothing logged against this {subject} yet. Updates and tracked time both show up here.
         </p>
       ) : (
         /* Five rows tall, then it scrolls. 520px let a busy project's feed run
@@ -65,7 +74,9 @@ export function ProjectActivityFeed({ events, total }: { events: ActivityEvent[]
                       {e.phase ? <span className="text-togo-muted"> on {e.phase}</span> : null}
                     </>
                   ) : (
-                    <span className="text-togo-muted">{STATUS_VERB[e.status || ""] || "updated"} this project</span>
+                    <span className="text-togo-muted">
+                      {STATUS_VERB[e.status || ""] || "updated"} this {subject}
+                    </span>
                   )}
                 </p>
                 {e.text && <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-togo-muted">{e.text}</p>}
