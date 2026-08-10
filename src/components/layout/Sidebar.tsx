@@ -39,6 +39,8 @@ export function getNavItems(isAdmin: boolean, _isSuperAdmin = false, isClient = 
     // and the All / My tabs on the page itself say that far more clearly than
     // two different nav labels did.
     { href: "/daily-updates", label: "Daily Updates", icon: ClipboardList, section: "menu" as const },
+    // Tasks live here too, as a second tab — they're the other half of the same
+    // list, so a separate nav item made them look like a separate concern.
     { href: "/projects", label: "Projects", icon: FolderKanban, section: "menu" as const },
     { href: "/members", label: "Team", icon: Users, section: "menu" as const },
     // Everyone can see who holds which tier; only the super admin can change

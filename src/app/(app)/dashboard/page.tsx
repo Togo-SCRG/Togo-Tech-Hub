@@ -6,6 +6,7 @@ import type { AccessLevel } from "@/types";
 import { STATUS_OPTIONS, statusHex } from "@/lib/utils";
 import { fetchProjectBlockers } from "@/lib/projectBlockers";
 import { isRealBlocker } from "@/lib/blockers";
+import { hasWorkType, onlyProjectWork } from "@/lib/schemaSupport";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -44,6 +45,8 @@ export default async function DashboardPage() {
   const seesEveryone = viewerCaps.includes("tracker.view.all");
   const ownId = viewer?.id ?? "";
 
+  const workTypeReady = await hasWorkType(supabase);
+
   const [
     { data: todayUpdates },
     { data: recentUpdates },
@@ -66,11 +69,10 @@ export default async function DashboardPage() {
       .limit(50),
     // Project work only: this drives the project rollup behind "Total projects"
     // and the six status tiles, and a task has no status of its own to count.
-    supabase
-      .from("daily_updates")
-      .select("project, status, date")
-      .eq("work_type", "project")
-      .order("date", { ascending: false }),
+    onlyProjectWork(
+      supabase.from("daily_updates").select("project, status, date"),
+      workTypeReady
+    ).order("date", { ascending: false }),
     // Deliberately NOT filtered: an hour in a meeting is still an hour tracked,
     // so it belongs in today's total and in the Hrs column.
     supabase.from("time_entries").select("project, user_id, date, duration_minutes"),
@@ -84,13 +86,14 @@ export default async function DashboardPage() {
     // because clearing that text is exactly what the Resolve button does — so
     // this is the same set the project pages show and the same set that shrinks
     // when someone resolves one.
-    supabase
-      .from("daily_updates")
-      .select("id, project, blockers, date, profiles(name)")
-      .eq("work_type", "project")
-      .not("blockers", "is", null)
-      .neq("blockers", "")
-      .order("date", { ascending: false }),
+    onlyProjectWork(
+      supabase
+        .from("daily_updates")
+        .select("id, project, blockers, date, profiles(name)")
+        .not("blockers", "is", null)
+        .neq("blockers", ""),
+      workTypeReady
+    ).order("date", { ascending: false }),
     // Blockers raised against a project directly (migration 038). Counted in the
     // same tile as the ones above — from the dashboard's point of view a blocker
     // is a blocker, whichever way it was raised.

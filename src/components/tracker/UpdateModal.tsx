@@ -90,9 +90,14 @@ export function UpdateModal({
 
   // Picking a project pulls that project's current status into the field, so it
   // opens showing where the project actually stands rather than a default.
+  //
+  // Projects only: this reads project_settings, so on a task it would pull the
+  // status of whatever project happens to share the name — which is exactly the
+  // confusion `work_type` exists to prevent. A task's status starts at the
+  // default and is whatever the person picks.
   useEffect(() => {
     const name = project.trim();
-    if (!open || !name || syncedProject.current === name) return;
+    if (!open || !name || workType !== "project" || syncedProject.current === name) return;
     syncedProject.current = name;
 
     let cancelled = false;
@@ -111,7 +116,7 @@ export function UpdateModal({
     return () => {
       cancelled = true;
     };
-  }, [project, open]);
+  }, [project, open, workType]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -217,27 +222,23 @@ export function UpdateModal({
               required
             />
           </div>
-          {/* Hidden for a task: this field moves a *project's* status, and a
-              task has none. The server ignores it on a task row rather than
-              trusting the form, so leaving it visible would be a control that
-              silently does nothing. */}
-          {workType === "project" && (
-            <div>
-              {/* "Project status", not "Status": this field moves the whole
-                  project, not just this one row. The column in the database is
-                  still `status` — only the label changed. */}
-              <Label htmlFor="update-status" hint={syncingStatus ? "Loading…" : undefined}>
-                Project status
-              </Label>
-              <Select id="update-status" value={status} onChange={(e) => setStatus(e.target.value)}>
-                {STATUS_OPTIONS.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          )}
+          <div>
+            {/* Same field either way, and the label says what it moves. On a
+                project it carries up to the project itself, so every view of
+                that project reflects it. On a task there is no project to move,
+                so it stays on this row — which is still worth recording, since
+                it's what the tracker's status column shows. */}
+            <Label htmlFor="update-status" hint={syncingStatus ? "Loading…" : undefined}>
+              {workType === "task" ? "Task status" : "Project status"}
+            </Label>
+            <Select id="update-status" value={status} onChange={(e) => setStatus(e.target.value)}>
+              {STATUS_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </Select>
+          </div>
         </div>
 
         <div>
@@ -262,6 +263,10 @@ export function UpdateModal({
                 // The two name lists are separate, so a half-typed project name
                 // is meaningless as a task and vice versa.
                 setProject("");
+                // And drop any status pulled in from the project that was
+                // selected a moment ago — it isn't this task's status.
+                setStatus("In Progress");
+                syncedProject.current = null;
               }}
             />
           </div>

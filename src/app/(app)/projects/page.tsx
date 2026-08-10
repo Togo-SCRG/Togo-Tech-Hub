@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
-import { ProjectsView } from "@/components/projects/ProjectsView";
+import { ProjectsTabs } from "@/components/projects/ProjectsTabs";
+import { fetchTaskRows } from "@/lib/fetchTaskRows";
 import { fetchProjectBlockers } from "@/lib/projectBlockers";
 import { isRealBlocker } from "@/lib/blockers";
+import { hasWorkType, onlyProjectWork } from "@/lib/schemaSupport";
 
 interface Participant {
   userId: string;
@@ -12,6 +14,8 @@ interface Participant {
 
 export default async function ProjectsPage() {
   const supabase = createClient();
+
+  const workTypeReady = await hasWorkType(supabase);
 
   const [
     { data: memberProjects },
@@ -24,13 +28,16 @@ export default async function ProjectsPage() {
       supabase.from("member_projects").select("*, profiles(id, name, avatar_url, role)"),
       // Project work only. A task ("Meetings", "Support") is logged in these
       // same tables but is not a project, so it must not appear in this list or
-      // contribute hours to one.
-      supabase
-        .from("daily_updates")
-        .select("*, profiles(id, name, avatar_url, role)")
-        .eq("work_type", "project")
-        .order("date", { ascending: false }),
-      supabase.from("time_entries").select("project, duration_minutes").eq("work_type", "project"),
+      // contribute hours to one. Skipped when migration 040 hasn't run — there
+      // are no tasks to exclude yet.
+      onlyProjectWork(
+        supabase.from("daily_updates").select("*, profiles(id, name, avatar_url, role)"),
+        workTypeReady
+      ).order("date", { ascending: false }),
+      onlyProjectWork(
+        supabase.from("time_entries").select("project, duration_minutes"),
+        workTypeReady
+      ),
       supabase
         .from("profiles")
         .select("id, name, invited_at, signed_in_at")
@@ -146,5 +153,9 @@ export default async function ProjectsPage() {
   }
   const members = people.filter((p) => !(p.invited_at && !p.signed_in_at));
 
-  return <ProjectsView projects={sortedProjects} members={members} />;
+  // The other half of the same two tables: the rows the queries above filtered
+  // out. Empty before migration 040, where nothing can be a task yet.
+  const tasks = workTypeReady ? await fetchTaskRows(supabase) : [];
+
+  return <ProjectsTabs projects={sortedProjects} members={members} tasks={tasks} />;
 }

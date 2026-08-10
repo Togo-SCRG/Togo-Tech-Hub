@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { normaliseWorkType } from "@/lib/workType";
+import { hasWorkType } from "@/lib/schemaSupport";
 
 function toCamel(row: any) {
   return {
@@ -36,8 +37,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const data: Record<string, unknown> = {};
   if (project !== undefined) data.project = project;
   // Editable, so an entry logged against the wrong kind can be corrected without
-  // deleting and re-adding it.
-  if (workType !== undefined) data.work_type = normaliseWorkType(workType);
+  // deleting and re-adding it. Skipped before migration 040, where there's only
+  // one kind for it to be.
+  if (workType !== undefined && (await hasWorkType(supabase))) {
+    data.work_type = normaliseWorkType(workType);
+  }
   if (phase !== undefined) data.phase = phase;
   if (date !== undefined) data.date = date;
   if (durationMinutes !== undefined) data.duration_minutes = durationMinutes;

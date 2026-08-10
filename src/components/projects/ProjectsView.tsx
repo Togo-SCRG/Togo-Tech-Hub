@@ -15,7 +15,6 @@ import { FilterPills } from "@/components/ui/FilterPills";
 import { ViewToggle } from "@/components/ui/ViewToggle";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { SortableHeader } from "@/components/ui/SortableHeader";
-import { CreateProjectModal } from "@/components/projects/CreateProjectModal";
 import { Pagination } from "@/components/ui/Pagination";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { PopoverPortal } from "@/components/ui/PopoverPortal";
@@ -35,7 +34,6 @@ import { useColumns } from "@/lib/useColumns";
 import { can } from "@/lib/capabilities";
 import { isTimelineOverdue } from "@/lib/timeline";
 import { TEN_ROWS_PY3 } from "@/lib/tableHeights";
-import type { MemberItem } from "@/types";
 
 const STATUS_PILLS: { label: string; value: string }[] = [
   { label: "All", value: "all" },
@@ -70,9 +68,16 @@ type SortKey = "name" | "team" | "time" | "blockers" | "timeline" | "status";
 export function ProjectsView({
   projects,
   members,
+  onCreateProject,
 }: {
   projects: ProjectSummary[];
   members: { id: string; name: string }[];
+  /**
+   * Opens the create-project modal, which lives in the tabs wrapper — the
+   * button sits in the tab row so it can become "New task" on the other tab.
+   * Still triggered from here by the empty state and the `n` hotkey.
+   */
+  onCreateProject?: () => void;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -82,8 +87,6 @@ export function ProjectsView({
   const [search, setSearch] = useState("");
   const [scope, setScope] = useState<"all" | "mine">("all");
   const { currentUser } = useCurrentUser();
-  const [fullMembers, setFullMembers] = useState<MemberItem[]>([]);
-  const [createModalOpen, setCreateModalOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const { visible: columnVisibility, isVisible, toggle: toggleColumn } = useColumns("projects");
   const canCreate = can(currentUser?.capabilities, "project.create");
@@ -113,12 +116,6 @@ export function ProjectsView({
   const [bulkTimeline, setBulkTimeline] = useState("");
   const bulkTimelineRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    fetch("/api/members")
-      .then((res) => res.json())
-      .then((data) => setFullMembers(data.members || []));
-  }, []);
-
   // There's no scheduler in this app, so opening the projects list is what
   // raises overdue notices. Fire-and-forget: the sweep dedupes server-side, and
   // a failure here shouldn't affect the page.
@@ -129,7 +126,9 @@ export function ProjectsView({
   useHotkeys({
     "/": () => searchRef.current?.focus(),
     v: () => toggleView(),
-    n: () => canCreate && setCreateModalOpen(true),
+    n: () => {
+      if (canCreate) onCreateProject?.();
+    },
   });
 
   const hasActiveFilters =
@@ -328,21 +327,11 @@ export function ProjectsView({
 
   return (
     <div className="space-y-4">
-      {/* Primary toolbar — status pills + engineer / view / new project */}
+      {/* Primary toolbar — status pills. "New project" used to sit at this row's
+          right; it's in the tab row now, so it can read "New task" on the other
+          tab instead of two buttons competing. */}
       <div className="flex flex-wrap items-center gap-2">
         <FilterPills pills={STATUS_PILLS} value={statusFilter} onChange={setStatusFilter} counts={statusCounts} />
-
-        <div className="ml-auto flex items-center gap-2">
-          {/* Open to every signed-in member — starting a project shouldn't
-              need an admin any more than documenting one does. */}
-          {/* Who may start a project is set in the permission matrix
-              (Access Levels → Permissions), not hardcoded here. */}
-          {canCreate && (
-            <Button size="sm" onClick={() => setCreateModalOpen(true)}>
-              + New project
-            </Button>
-          )}
-        </div>
       </div>
 
       {/* Utility row — scope tabs + search + clear */}
@@ -406,8 +395,8 @@ export function ProjectsView({
             title="No projects yet"
             description="Projects appear here automatically once someone logs an update or tracks time against one — or create one now to assign a team and set an hour cap."
             action={
-              canCreate ? (
-                <Button size="sm" onClick={() => setCreateModalOpen(true)}>
+              canCreate && onCreateProject ? (
+                <Button size="sm" onClick={onCreateProject}>
                   + New project
                 </Button>
               ) : undefined
@@ -832,10 +821,6 @@ export function ProjectsView({
             className="border-t border-togo-border px-4 py-3"
           />
         </div>
-      )}
-
-      {canCreate && (
-        <CreateProjectModal open={createModalOpen} onClose={() => setCreateModalOpen(false)} members={fullMembers} />
       )}
 
       <ConfirmDialog
