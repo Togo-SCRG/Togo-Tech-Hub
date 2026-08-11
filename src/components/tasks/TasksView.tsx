@@ -46,14 +46,23 @@ export interface TaskRow {
 
 type SortKey = "name" | "people" | "time" | "entries" | "activity" | "status";
 
-/** Same shape as the projects table's column list. */
+/**
+ * Same shape, and the same width strategy, as the projects table: the name
+ * column takes no width so it absorbs whatever's left over, and the data
+ * columns are fixed. That's what keeps the row spread across the full container
+ * rather than bunched at one end.
+ *
+ * `whitespace-nowrap` is the one addition — "Total time" and "Last activity"
+ * were wrapping onto two lines and doubling the header's height. White-space is
+ * inherited, so setting it on the `th` covers the sort button inside it.
+ */
 const ALL_COLUMNS: { key: SortKey; label: string; className?: string }[] = [
-  { key: "name", label: "Task" },
-  { key: "people", label: "People", className: "w-40" },
-  { key: "time", label: "Total time", className: "w-28" },
-  { key: "entries", label: "Entries", className: "w-40" },
-  { key: "activity", label: "Last activity", className: "w-32" },
-  { key: "status", label: "Status", className: "w-32" },
+  { key: "name", label: "Task", className: "whitespace-nowrap" },
+  { key: "people", label: "People", className: "w-40 whitespace-nowrap" },
+  { key: "time", label: "Total time", className: "w-28 whitespace-nowrap" },
+  { key: "entries", label: "Entries", className: "w-32 whitespace-nowrap" },
+  { key: "activity", label: "Last activity", className: "w-32 whitespace-nowrap" },
+  { key: "status", label: "Status", className: "w-32 whitespace-nowrap" },
 ];
 
 /** "Task" is the row's identity, so it isn't offered as hideable. */
@@ -243,31 +252,16 @@ export function TasksView({
           "Meetings" and "Onboarding" is why they aren't in Projects, and the tab
           it sits behind can't answer that on its own. No heading — the tab is
           the heading. */}
-      <div className="flex flex-wrap items-start justify-between gap-4 rounded-md border border-togo-border bg-togo-surface px-4 py-3">
-        <p className="min-w-0 max-w-2xl text-xs leading-relaxed text-togo-muted">
+      {/* Full width, no stat block: the counts were already on the tab and in
+          the table's own header strip, and squeezing them alongside pushed this
+          from two lines to three. */}
+      <div className="rounded-md border border-togo-border bg-togo-surface px-4 py-2.5">
+        <p className="text-xs leading-relaxed text-togo-muted">
           <ListTodo size={13} className="mr-1.5 inline-block shrink-0 -translate-y-px text-togo-blue" />
           <span className="font-semibold text-togo-white">Tasks are work that can&apos;t be called a project</span> —
           often a one-time thing. Meetings, onboarding, support, admin and one-off requests belong here. Their hours
-          still count towards tracked time, but they have no status, timeline or team, and never appear under
-          Projects.
+          still count towards tracked time, but they never appear under Projects.
         </p>
-
-        {tasks.length > 0 && (
-          <dl className="flex shrink-0 items-stretch gap-x-5">
-            <div>
-              <dt className="text-[10px] uppercase tracking-wider text-togo-faint">Tasks</dt>
-              <dd className="tnum mt-0.5 text-sm font-bold text-togo-white">{tasks.length}</dd>
-            </div>
-            <div className="border-l border-togo-border pl-5">
-              <dt className="text-[10px] uppercase tracking-wider text-togo-faint">Total logged</dt>
-              <dd className="tnum mt-0.5 text-sm font-bold text-togo-white">
-                {tasks.reduce((s, t) => s + t.totalMinutes, 0) > 0
-                  ? formatMinutes(tasks.reduce((s, t) => s + t.totalMinutes, 0))
-                  : "0h"}
-              </dd>
-            </div>
-          </dl>
-        )}
       </div>
 
       {/* Two toolbar rows, laid out exactly as the Projects tab: filter pills
@@ -522,7 +516,7 @@ export function TasksView({
                           page, where there's room for it. In a row it pushed the
                           line height around and made the table read as two
                           different densities. */}
-                      <td className="max-w-sm px-4 py-3">
+                      <td className="px-4 py-3">
                         <Link
                           href={`/tasks/${encodeURIComponent(t.name)}`}
                           className="font-semibold text-togo-white transition-colors hover:text-togo-blue"
