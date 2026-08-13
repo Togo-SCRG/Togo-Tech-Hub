@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Pencil } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
-import { toSentenceCase } from "@/lib/utils";
+import { toNameCase } from "@/lib/utils";
 import type { ClientItem } from "@/types";
 
 // "Add Client" deliberately isn't here — it sits next to "Add member" on the
@@ -65,7 +65,7 @@ export function FeaturedClients({
                   which read as though the job title were the person. */}
               <div className="min-w-0 space-y-0.5">
                 <p className="truncate text-lg font-extrabold leading-tight text-togo-white">
-                  {toSentenceCase(c.name)}
+                  {toNameCase(c.name)}
                 </p>
                 <p className="truncate text-xs font-semibold uppercase tracking-wide text-togo-muted">{c.role}</p>
               </div>

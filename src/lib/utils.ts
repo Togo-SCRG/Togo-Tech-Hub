@@ -106,12 +106,24 @@ export function timeAgo(value: string | Date, now: Date = new Date()): string {
   return `${days} day${days === 1 ? "" : "s"} ago`;
 }
 
-// Normalizes a name to only its first letter capitalized, regardless of how
-// it was typed in (e.g. "MICHAEL FULLAM" or "michael fullam" both become
-// "Michael fullam").
-export function toSentenceCase(text: string) {
-  const lower = text.toLowerCase();
-  return lower ? lower[0].toUpperCase() + lower.slice(1) : lower;
+/**
+ * Capitalises every word of a person's name — "alex steurer" and "ALEX STEURER"
+ * both become "Alex Steurer". Sentence case is wrong for a name: it produced
+ * "Alex steurer", which reads as a typo.
+ *
+ * Hyphens and apostrophes count as word breaks, so "mary-jane o'brien" comes out
+ * as "Mary-Jane O'Brien". Anything already mixed-case in the middle of a word is
+ * left alone, which is what preserves "McDonald" and "van der Berg" — those are
+ * spellings a general rule can't infer, so the rule doesn't try.
+ */
+export function toNameCase(text: string) {
+  return text.replace(/[^\s\-']+/g, (word) => {
+    // A word typed in one case has no intent to preserve, so normalise it. One
+    // with capitals inside (McDonald, O'Neill) was spelled deliberately.
+    const uniform = word === word.toLowerCase() || word === word.toUpperCase();
+    const base = uniform ? word.toLowerCase() : word;
+    return base.charAt(0).toUpperCase() + base.slice(1);
+  });
 }
 
 // Job-title seniority, highest first — director outranks supervisor, and
