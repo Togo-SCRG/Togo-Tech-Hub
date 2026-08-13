@@ -30,8 +30,12 @@ export default async function ProjectsPage() {
       // same tables but is not a project, so it must not appear in this list or
       // contribute hours to one. Skipped when migration 040 hasn't run — there
       // are no tasks to exclude yet.
+      // Named columns, not `*`: this reads every update ever logged, and the
+      // update/whats_left/timeline text it was also pulling is never used here.
       onlyProjectWork(
-        supabase.from("daily_updates").select("*, profiles(id, name, avatar_url, role)"),
+        supabase
+          .from("daily_updates")
+          .select("project, date, status, blockers, user_id, profiles(id, name, avatar_url, role)"),
         workTypeReady
       ).order("date", { ascending: false }),
       onlyProjectWork(
@@ -105,11 +109,14 @@ export default async function ProjectsPage() {
     // dashboard use, and the same thing the Resolve button clears. Placeholders
     // ("N/A", "None", "Done") don't count.
     if (isRealBlocker(u.blockers)) entry.blockerCount += 1;
-    if (!entry.participants.has(u.user_id) && u.profiles) {
+    // The embedded row's inferred type depends on the select shape, so it's read
+    // through one narrow cast rather than trusted.
+    const author = u.profiles as unknown as { name?: string; avatar_url?: string | null } | null;
+    if (!entry.participants.has(u.user_id) && author?.name) {
       entry.participants.set(u.user_id, {
         userId: u.user_id,
-        name: u.profiles.name,
-        avatarUrl: u.profiles.avatar_url,
+        name: author.name,
+        avatarUrl: author.avatar_url ?? null,
         status: u.status,
       });
     }

@@ -15,11 +15,20 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  */
 
 /**
- * Cached only when true. A `false` is re-probed every time, which costs one
- * `limit(1)` query while the migration is outstanding and means the app starts
- * working the moment it's run — without a redeploy or restart.
+ * A `true` is cached forever — a column can't un-exist.
+ *
+ * A `false` is cached for a short while rather than not at all. Re-probing on
+ * every request meant an extra Supabase round trip per page for every
+ * outstanding migration, and because the result is needed before the page's main
+ * queries can be built, those round trips were serialised in front of everything
+ * else — several hundred milliseconds of dead time on every navigation. A minute
+ * of staleness is a fair trade: run the migration and the app picks it up on its
+ * own shortly after, still with no redeploy.
  */
+const RETRY_AFTER_MS = 60_000;
+
 const confirmed = new Set<string>();
+const missingUntil = new Map<string, number>();
 
 async function columnExists(
   supabase: SupabaseClient,
@@ -29,9 +38,16 @@ async function columnExists(
   const key = `${table}.${column}`;
   if (confirmed.has(key)) return true;
 
-  const { error } = await supabase.from(table).select(column).limit(1);
-  if (error) return false;
+  const retryAt = missingUntil.get(key);
+  if (retryAt !== undefined && Date.now() < retryAt) return false;
 
+  const { error } = await supabase.from(table).select(column).limit(1);
+  if (error) {
+    missingUntil.set(key, Date.now() + RETRY_AFTER_MS);
+    return false;
+  }
+
+  missingUntil.delete(key);
   confirmed.add(key);
   return true;
 }
