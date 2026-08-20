@@ -18,8 +18,9 @@ import {
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { Avatar } from "@/components/ui/Avatar";
 import { TogoLogo } from "./TogoLogo";
+import type { CurrentUser } from "@/types";
 
 export interface NavItem {
   href: string;
@@ -56,10 +57,12 @@ export function Sidebar({
   isAdmin,
   isSuperAdmin = false,
   isClient = false,
+  user,
 }: {
   isAdmin: boolean;
   isSuperAdmin?: boolean;
   isClient?: boolean;
+  user?: CurrentUser | null;
 }) {
   const NAV_ITEMS = getNavItems(isAdmin, isSuperAdmin, isClient);
   const pathname = usePathname();
@@ -95,19 +98,10 @@ export function Sidebar({
         collapsed ? "w-20" : "w-60"
       )}
     >
-      <div className="relative border-b border-togo-border px-4 py-5">
-        {!collapsed && (
-          <button
-            onClick={toggleCollapsed}
-            className="absolute right-3 top-3 rounded-md border border-togo-border bg-togo-surface p-1 text-togo-muted transition-colors hover:border-togo-blue hover:text-togo-blue"
-            title="Collapse sidebar"
-            aria-label="Collapse sidebar"
-            aria-expanded
-          >
-            <ChevronLeft size={16} />
-          </button>
-        )}
-
+      {/* The collapse control lives in the footer now, next to Out — the two
+          sidebar-level actions read as a pair there, and the header is left to
+          the brand alone. */}
+      <div className="border-b border-togo-border px-4 py-5">
         <div className="flex flex-col items-center gap-2">
           <TogoLogo compact={collapsed} />
           {!collapsed && (
@@ -117,18 +111,6 @@ export function Sidebar({
           )}
         </div>
       </div>
-
-      {collapsed && (
-        <button
-          onClick={toggleCollapsed}
-          className="mx-auto mt-3 rounded-md border border-togo-border bg-togo-surface p-1 text-togo-muted transition-colors hover:border-togo-blue hover:text-togo-blue"
-          title="Expand sidebar"
-          aria-label="Expand sidebar"
-          aria-expanded={false}
-        >
-          <ChevronRight size={16} />
-        </button>
-      )}
 
       <nav aria-label="Main navigation" className="flex-1 px-2 py-3">
         {(["menu", "admin"] as const).map((section) => {
@@ -171,26 +153,60 @@ export function Sidebar({
         })}
       </nav>
 
-      <div className="border-t border-togo-border p-2 space-y-0.5">
-        <button
-          onClick={() => setLogoutConfirmOpen(true)}
-          title={collapsed ? "Log Out" : undefined}
-          aria-label="Log out"
-          className={cn(
-            "flex w-full items-center gap-3 rounded-md py-2 text-sm font-medium text-togo-muted transition-colors hover:bg-[var(--status-blocked-bg)] hover:text-[var(--status-blocked-fg)]",
-            collapsed ? "justify-center px-0" : "px-4"
-          )}
-        >
-          <LogOut size={18} className="shrink-0" />
-          {!collapsed && "Log Out"}
-        </button>
-        {collapsed ? (
-          <div className="flex justify-center py-1">
-            <ThemeToggle />
-          </div>
-        ) : (
-          <ThemeToggle variant="row" />
+      {/* Who you're signed in as, then the two sidebar actions. The theme
+          toggle moved to the topbar so it sits with the other icon controls;
+          this footer is now identity + the actions that act on the sidebar
+          itself. */}
+      <div className={cn("border-t border-togo-border", collapsed ? "space-y-2 p-2" : "space-y-2.5 p-3")}>
+        {user && (
+          <Link
+            href="/settings"
+            title={collapsed ? `${user.name} — profile and settings` : "Your profile and settings"}
+            className={cn(
+              "flex items-center rounded-md border border-transparent transition-colors hover:border-togo-border hover:bg-togo-surface",
+              collapsed ? "justify-center p-1" : "gap-2.5 bg-togo-surface/60 p-2.5"
+            )}
+          >
+            {/* Squared-off rather than the circle used elsewhere: at this size
+                it reads as an account tile, not another avatar in a stack. */}
+            <Avatar name={user.name} avatarUrl={user.avatarUrl} size="sm" className="rounded-lg" />
+            {!collapsed && (
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-bold leading-tight text-togo-white">{user.name}</div>
+                <div className="truncate text-[11px] leading-tight text-togo-blue">{user.email}</div>
+              </div>
+            )}
+          </Link>
         )}
+
+        <div className={cn(collapsed ? "space-y-2" : "grid grid-cols-2 gap-2")}>
+          <button
+            onClick={toggleCollapsed}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-expanded={!collapsed}
+            className={cn(
+              "flex items-center justify-center gap-1.5 rounded-md border border-togo-border bg-togo-surface/40 py-2 text-xs font-medium text-togo-muted transition-colors hover:border-togo-blue hover:text-togo-blue",
+              collapsed ? "w-full px-0" : "px-2"
+            )}
+          >
+            {collapsed ? <ChevronRight size={15} className="shrink-0" /> : <ChevronLeft size={15} className="shrink-0" />}
+            {!collapsed && "Collapse"}
+          </button>
+
+          <button
+            onClick={() => setLogoutConfirmOpen(true)}
+            title="Log out"
+            aria-label="Log out"
+            className={cn(
+              "flex items-center justify-center gap-1.5 rounded-md border border-togo-border bg-togo-surface/40 py-2 text-xs font-medium text-togo-muted transition-colors hover:border-[var(--status-blocked-fg)] hover:bg-[var(--status-blocked-bg)] hover:text-[var(--status-blocked-fg)]",
+              collapsed ? "w-full px-0" : "px-2"
+            )}
+          >
+            <LogOut size={15} className="shrink-0" />
+            {!collapsed && "Out"}
+          </button>
+        </div>
       </div>
 
       <ConfirmDialog

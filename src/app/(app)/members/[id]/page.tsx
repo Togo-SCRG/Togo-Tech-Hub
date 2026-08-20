@@ -15,6 +15,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
+import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import { Button } from "@/components/ui/Button";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { TierBadge } from "@/components/ui/TierBadge";
@@ -38,7 +39,10 @@ export default function MemberProfilePage() {
   const [allMembers, setAllMembers] = useState<MemberItem[]>([]);
   const [memberProjects, setMemberProjects] = useState<MemberProjectItem[]>([]);
   const [projectNames, setProjectNames] = useState<string[]>([]);
-  const [tab, setTab] = useState<"activity" | "projects">("activity");
+  // Opens on Projects: it's the first tab, and "what are they working on" is
+  // the question this page is usually opened to answer.
+  const [tab, setTab] = useState<"activity" | "projects">("projects");
+  const [photoPreviewOpen, setPhotoPreviewOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<MemberProjectItem | null>(null);
@@ -180,7 +184,22 @@ export default function MemberProfilePage() {
       <BackButton label="Back to team" fallbackHref="/members" />
       <div className="flex flex-col justify-between gap-5 rounded-md border border-togo-border bg-togo-charcoal p-6 sm:flex-row sm:items-center">
         <div className="flex items-center gap-5">
-          <Avatar name={member.name} avatarUrl={member.avatarUrl} size="lg" />
+          {/* Only a real uploaded photo is worth enlarging — the initials
+              fallback is generated at whatever size it's asked for, so a
+              lightbox of it would show nothing you can't already see. */}
+          {member.avatarUrl ? (
+            <button
+              type="button"
+              onClick={() => setPhotoPreviewOpen(true)}
+              title={`View ${member.name}'s photo`}
+              aria-label={`View ${member.name}'s photo`}
+              className="shrink-0 rounded-full ring-offset-2 ring-offset-togo-charcoal transition-shadow hover:ring-2 hover:ring-togo-blue focus-visible:ring-2 focus-visible:ring-togo-blue"
+            >
+              <Avatar name={member.name} avatarUrl={member.avatarUrl} size="lg" />
+            </button>
+          ) : (
+            <Avatar name={member.name} avatarUrl={member.avatarUrl} size="lg" />
+          )}
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-extrabold text-togo-white">{member.name}</h1>
@@ -298,7 +317,7 @@ export default function MemberProfilePage() {
           )}
 
           <div role="tablist" aria-label="Profile sections" className="flex gap-2 border-b border-togo-border">
-        {(["activity", "projects"] as const).map((t) => {
+        {(["projects", "activity"] as const).map((t) => {
           const count = t === "activity" ? updates.length : memberProjects.length;
           return (
             <button
@@ -455,7 +474,10 @@ export default function MemberProfilePage() {
         </>
       )}
 
-      {canDeleteMember && (
+      {/* Projects tab only. This sat outside both tabs, so it showed up under
+          the activity feed too — the same destructive action twice on one page,
+          in the tab that has nothing to do with managing the account. */}
+      {canDeleteMember && tab === "projects" && (
         <div className="space-y-4 rounded-md border border-[var(--status-blocked-border)] bg-togo-surface p-6">
           <div className="flex items-start gap-2.5">
             <AlertTriangle size={16} className="mt-0.5 shrink-0 text-[var(--status-blocked-fg)]" />
@@ -510,6 +532,16 @@ export default function MemberProfilePage() {
             setDeleteConfirmOpen(false);
             setDeleteError(null);
           }}
+        />
+      )}
+
+      {member.avatarUrl && (
+        <ImageLightbox
+          open={photoPreviewOpen}
+          onClose={() => setPhotoPreviewOpen(false)}
+          src={member.avatarUrl}
+          alt={`${member.name}'s profile photo`}
+          caption={member.name}
         />
       )}
     </div>
