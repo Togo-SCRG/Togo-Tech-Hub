@@ -35,11 +35,11 @@ export function Topbar({ user }: { user: CurrentUser | null }) {
       {user && (
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <ActiveTimerBar />
+          <NotificationBell />
           {/* The theme toggle used to live in the sidebar footer, which now
               carries the account card instead. Here it sits with the other
               icon-sized controls. */}
           <ThemeToggle />
-          <NotificationBell />
           {/* Clock icon rather than a bare string, so the date/time reads as a
               status readout and lines up with the icon buttons beside it. */}
           <span className="hidden items-center gap-1.5 whitespace-nowrap text-xs text-togo-muted sm:flex">

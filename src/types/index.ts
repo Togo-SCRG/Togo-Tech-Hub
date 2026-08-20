@@ -69,7 +69,15 @@ export interface MemberProjectItem {
   id: string;
   userId: string;
   project: string;
+  /** This person's own status for the project. Superseded for display by
+   *  `projectStatus` — see /api/member-projects. */
   status: string;
+  /**
+   * The project's overall status, from project_settings — the same value the
+   * project's own page and the Projects list show. Null when the project has no
+   * settings row yet.
+   */
+  projectStatus?: string | null;
   role?: string | null;
   partnerIds: string[];
   createdAt: string;

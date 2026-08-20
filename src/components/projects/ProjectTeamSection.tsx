@@ -6,7 +6,6 @@ import Link from "next/link";
 import { UserPlus, X } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { StatusBadge } from "@/components/ui/StatusBadge";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { AddProjectMemberModal } from "@/components/projects/AddProjectMemberModal";
@@ -21,6 +20,13 @@ interface Participant {
   name: string;
   avatarUrl: string | null;
   role: string | null;
+  /**
+   * This person's own status for the project. No longer shown here: the panel
+   * lists who is on the project, and one status per person alongside the
+   * project's single status in the header read as a contradiction. Still on the
+   * type because the Projects list uses it as a fallback for projects with no
+   * settings row.
+   */
   status: string;
   partnerIds: string[];
 }
@@ -70,24 +76,6 @@ export function ProjectTeamSection({
     setRemoving(false);
   }
 
-  async function handleStatusChange(p: Participant, status: string) {
-    if (!p.memberProjectId) return;
-    const res = await fetch(`/api/member-projects/${p.memberProjectId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    // Previously this reported nothing either way: a rejected status change
-    // just left the old badge on screen, indistinguishable from a missed click.
-    if (res.ok) {
-      router.refresh();
-      toast.success(`${p.name} is now ${status} on this project.`);
-    } else {
-      const data = await res.json().catch(() => ({}));
-      toast.error(data.error || `Couldn't update ${p.name}'s status.`);
-    }
-  }
-
   return (
     <section className="overflow-hidden rounded-md border border-togo-border bg-togo-surface">
       <div className="flex items-center gap-2 border-b border-togo-border px-4 py-3">
@@ -127,8 +115,6 @@ export function ProjectTeamSection({
             // capability is only consulted for other people.
             const canRemove =
               !!p.memberProjectId && (canUnassign || currentUser?.id === p.userId);
-            const canChangeStatus =
-              !!p.memberProjectId && (canUnassign || currentUser?.id === p.userId);
             const minutes = minutesByUser[p.userId] || 0;
             return (
               <li key={p.userId} className="group flex items-center gap-2.5 px-4 py-2.5">
@@ -149,10 +135,6 @@ export function ProjectTeamSection({
 
                 <div className="flex shrink-0 flex-col items-end gap-1">
                   <div className="flex items-center gap-1.5">
-                    <StatusBadge
-                      status={p.status}
-                      onClick={canChangeStatus ? (s) => handleStatusChange(p, s) : undefined}
-                    />
                     {canRemove && (
                       <button
                         onClick={() => setRemoveTarget(p)}

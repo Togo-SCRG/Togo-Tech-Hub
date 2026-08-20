@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { ShieldCheck, Info, Check } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
 import { compareByRole } from "@/lib/utils";
 import { AccessLevelsTable } from "@/components/access/AccessLevelsTable";
 import { CreateUserButton } from "@/components/access/CreateUserButton";
@@ -87,21 +88,13 @@ const TIER_INFO: {
 export default async function AccessLevelsPage() {
   const supabase = createClient();
 
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-  if (!authUser) redirect("/login");
-
-  const { data: me } = await supabase
-    .from("profiles")
-    .select("access_level")
-    .eq("id", authUser.id)
-    .single();
+  const me = await getCurrentUser();
+  if (!me) redirect("/login");
 
   // Readable by the whole team — knowing who can do what isn't privileged
   // information. Only the super admin can change a tier; everyone else gets
   // the same page without the controls.
-  const myLevel = (me?.access_level as AccessLevel | undefined) ?? "user";
+  const myLevel = me.accessLevel ?? "user";
   const canEdit = myLevel === "super_admin";
 
   // invited_at/signed_in_at arrive with migration 018. Selecting a column that
@@ -190,7 +183,7 @@ export default async function AccessLevelsPage() {
 
       <AccessLevelsTable
         initialMembers={members}
-        currentUserId={authUser.id}
+        currentUserId={me.id}
         canEdit={canEdit}
         pendingCount={pendingCount}
       />

@@ -21,10 +21,16 @@ export async function capabilitiesFor(
   // The super admin is never gated, matching has_permission().
   if (accessLevel === "super_admin") return ALL;
 
-  const { data, error } = await supabase
-    .from("permissions")
-    .select("capability, allowed")
-    .eq("access_level", accessLevel);
+  // Both at once. The overrides don't depend on the tier's answer — they're
+  // applied on top of it — so awaiting them in sequence just added a second
+  // round trip to a chain that every page waits on before it can start its own
+  // queries.
+  const [{ data, error }, overrideResult] = await Promise.all([
+    supabase.from("permissions").select("capability, allowed").eq("access_level", accessLevel),
+    userId
+      ? supabase.from("permission_overrides").select("capability, allowed").eq("user_id", userId)
+      : Promise.resolve({ data: null }),
+  ]);
 
   // Before migration 032 the table doesn't exist. Falling back to "everything"
   // keeps the app usable in that window — the database is still enforcing the
@@ -36,15 +42,9 @@ export async function capabilitiesFor(
 
   // Per-person overrides (033) win over the tier, in both directions: a row
   // with allowed = false is a real deny, which is why this can't just union.
-  if (userId) {
-    const { data: overrides } = await supabase
-      .from("permission_overrides")
-      .select("capability, allowed")
-      .eq("user_id", userId);
-    for (const row of overrides || []) {
-      if (row.allowed) granted.add(row.capability as string);
-      else granted.delete(row.capability as string);
-    }
+  for (const row of overrideResult.data || []) {
+    if (row.allowed) granted.add(row.capability as string);
+    else granted.delete(row.capability as string);
   }
 
   return [...granted];

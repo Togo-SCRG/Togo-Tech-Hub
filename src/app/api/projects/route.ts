@@ -21,23 +21,41 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // `work_type` only exists after migration 040; asking for it before then makes
-  // the whole select fail, which would empty every project picker in the app.
-  // Two literal selects rather than one built from a variable — the Supabase
-  // client parses the column list at the type level, so it can't be dynamic.
-  const workTypeReady = await hasWorkType(supabase);
-
   type LogRow = { project: string; work_type?: string };
-  const logNames = async (table: "daily_updates" | "time_entries"): Promise<LogRow[]> => {
-    const { data } = workTypeReady
-      ? await supabase.from(table).select("project, work_type")
-      : await supabase.from(table).select("project");
-    return (data || []) as LogRow[];
+
+  /**
+   * The names already used on logged work.
+   *
+   * Preferred source is the view from migration 043, which does the DISTINCT in
+   * Postgres and returns a few dozen rows. Until that migration has been run,
+   * this falls back to what it used to do — read the `project` column of both
+   * log tables in full and distinct them here. Correct either way; the fallback
+   * is just the slow one, and it stops being used once 043 lands.
+   */
+  const loggedNames = async (): Promise<LogRow[]> => {
+    const { data: directory, error } = await supabase
+      .from("project_name_directory")
+      .select("project, work_type");
+    if (!error) return (directory || []) as LogRow[];
+
+    // `work_type` only exists after migration 040; asking for it before then
+    // makes the whole select fail, which would empty every project picker in the
+    // app. Two literal selects rather than one built from a variable — the
+    // Supabase client parses the column list at the type level, so it can't be
+    // dynamic.
+    const workTypeReady = await hasWorkType(supabase);
+    const scan = async (table: "daily_updates" | "time_entries"): Promise<LogRow[]> => {
+      const { data } = workTypeReady
+        ? await supabase.from(table).select("project, work_type")
+        : await supabase.from(table).select("project");
+      return (data || []) as LogRow[];
+    };
+    const [updates, entries] = await Promise.all([scan("daily_updates"), scan("time_entries")]);
+    return [...updates, ...entries];
   };
 
-  const [dailyUpdates, timeEntries, { data: memberProjects }, { data: projectSettings }] = await Promise.all([
-    logNames("daily_updates"),
-    logNames("time_entries"),
+  const [logged, { data: memberProjects }, { data: projectSettings }] = await Promise.all([
+    loggedNames(),
     supabase.from("member_projects").select("project"),
     supabase.from("project_settings").select("project"),
   ]);
@@ -45,7 +63,7 @@ export async function GET() {
   const names = new Set<string>();
   const taskNames = new Set<string>();
 
-  for (const row of [...dailyUpdates, ...timeEntries]) {
+  for (const row of logged) {
     // `work_type` is undefined until migration 040 runs; treat that as project
     // work, which is what every existing row is.
     if (row.work_type === "task") taskNames.add(row.project);

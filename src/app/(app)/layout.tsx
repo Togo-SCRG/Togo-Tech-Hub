@@ -1,47 +1,17 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { capabilitiesFor } from "@/lib/permissions";
+import { getCurrentUser } from "@/lib/auth";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
-import type { CurrentUser } from "@/types";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const supabase = createClient();
+  // Request-scoped: the pages rendered inside this layout ask for the same
+  // thing, and get this answer rather than repeating the three round trips it
+  // took to build. See lib/auth.ts.
+  const user = await getCurrentUser();
 
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-
-  if (!authUser) {
+  if (!user) {
     redirect("/login");
   }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, email, name, avatar_url, role, is_admin, access_level")
-    .eq("id", authUser.id)
-    .single();
-
-  if (!profile) {
-    redirect("/login");
-  }
-
-  const capabilities = await capabilitiesFor(supabase, profile.access_level, profile.id);
-
-  const user: CurrentUser = {
-    id: profile.id,
-    email: profile.email,
-    name: profile.name,
-    avatarUrl: profile.avatar_url,
-    role: profile.role,
-    isAdmin: profile.is_admin,
-    accessLevel: profile.access_level,
-    isSuperAdmin: profile.access_level === "super_admin",
-    isClient: profile.access_level === "client",
-    // Mirrors the database rule (migration 029): clients are read-only.
-    canEdit: profile.access_level !== "client",
-    capabilities,
-  };
 
   return (
     <div className="flex min-h-screen bg-togo-black">

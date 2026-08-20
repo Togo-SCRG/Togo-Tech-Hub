@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { notify } from "@/lib/notifications";
 
-function toCamel(row: any) {
+function toCamel(row: any, projectStatus?: string | null) {
   return {
     id: row.id,
     userId: row.user_id,
     project: row.project,
     status: row.status,
+    // The project's status, not this person's. The profile shows one status per
+    // project card and it should be the project's — a card reading "Not Started"
+    // for a project that's In Progress everywhere else was just wrong.
+    projectStatus: projectStatus ?? null,
     role: row.role,
     partnerIds: row.partner_ids || [],
     createdAt: row.created_at,
@@ -31,13 +35,22 @@ export async function GET(req: NextRequest) {
   let query = supabase.from("member_projects").select("*").order("created_at", { ascending: false });
   if (userId) query = query.eq("user_id", userId);
 
-  const { data, error } = await query;
+  // project_settings is small (one row per project) and independent of the rows
+  // above, so it rides along concurrently rather than adding a round trip.
+  const [{ data, error }, { data: settings }] = await Promise.all([
+    query,
+    supabase.from("project_settings").select("project, status"),
+  ]);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ projects: data.map(toCamel) });
+  const statusByProject = new Map((settings || []).map((s) => [s.project, s.status]));
+
+  return NextResponse.json({
+    projects: data.map((row) => toCamel(row, statusByProject.get(row.project))),
+  });
 }
 
 export async function POST(req: NextRequest) {

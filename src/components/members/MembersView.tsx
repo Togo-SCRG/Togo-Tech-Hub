@@ -40,7 +40,8 @@ interface MemberRow {
   access_level: AccessLevel;
   /** Invited but hasn't signed in yet. */
   pending?: boolean;
-  updates: { project: string; status: string; date: string }[];
+  /** Counted in Postgres rather than shipped row-by-row — see migration 042. */
+  stats: { total: number; completed: number; projects: string[] };
 }
 
 type MemberSortKey = "name" | "role" | "access" | "projectCount";
@@ -109,7 +110,7 @@ export function MembersView({ members }: { members: MemberRow[] }) {
     `members-order:${currentUser?.id ?? "anon"}`
   );
 
-  const projectCount = (m: MemberRow) => new Set(m.updates.map((u) => u.project)).size;
+  const projectCount = (m: MemberRow) => m.stats.projects.length;
 
   // Sorted ahead of pagination so a column sort covers every member, not just
   // whichever ones happen to be on the current page.
@@ -319,7 +320,7 @@ export function MembersView({ members }: { members: MemberRow[] }) {
           {view === "card" ? (
         <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
           {pagedMembers.map((m) => {
-            const done = m.updates.filter((u) => u.status === "Completed").length;
+            const done = m.stats.completed;
             const canDelete = can(currentUser?.capabilities, "member.delete") && currentUser?.id !== m.id;
             return (
               <Link
@@ -365,9 +366,9 @@ export function MembersView({ members }: { members: MemberRow[] }) {
                   <TierBadge tier={m.access_level} />
                 </div>
                 <div className="grid grid-cols-2 gap-1.5">
-                  <div className="rounded bg-togo-surface-2 p-1.5" title={`${m.updates.length} updates logged`}>
+                  <div className="rounded bg-togo-surface-2 p-1.5" title={`${m.stats.total} updates logged`}>
                     <div className="text-[10px] text-togo-faint">Updates</div>
-                    <div className="tnum text-base font-bold text-togo-white">{m.updates.length}</div>
+                    <div className="tnum text-base font-bold text-togo-white">{m.stats.total}</div>
                   </div>
                   <div className="rounded bg-togo-surface-2 p-1.5" title={`${done} marked completed`}>
                     <div className="text-[10px] text-togo-faint">Done</div>
@@ -420,7 +421,7 @@ export function MembersView({ members }: { members: MemberRow[] }) {
             </thead>
             <tbody className="divide-y divide-togo-border">
               {pagedMembers.map((m) => {
-                const uniqueProjects = Array.from(new Set(m.updates.map((u) => u.project)));
+                const uniqueProjects = m.stats.projects;
                 return (
                   <tr
                     key={m.id}
