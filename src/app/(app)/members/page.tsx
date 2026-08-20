@@ -14,7 +14,7 @@ interface ProfileRow {
   signed_in_at?: string | null;
 }
 
-/** What the page actually needs per person — see migration 042. */
+/** What the roster shows per person. */
 export interface MemberStats {
   total: number;
   completed: number;
@@ -24,39 +24,69 @@ export interface MemberStats {
 const EMPTY_STATS: MemberStats = { total: 0, completed: 0, projects: [] };
 
 /**
- * Per-member update counts, from the database where possible.
+ * How much work each person has logged.
  *
- * The view (migration 042) returns one row per member. Until that migration has
- * been run by hand in the SQL Editor, this falls back to what the page used to
- * do — read every update and group them here — so the page keeps working in the
- * window where deployed code is ahead of the database. The fallback is the slow
- * path on purpose: it's correct, and it stops being used the moment 042 lands.
+ * Counts only — the project list comes from `fetchMemberProjects` below. The
+ * view (migration 042) returns one row per member; until it has been run by
+ * hand in the SQL Editor this falls back to reading the rows and counting them
+ * here, so the page keeps working while deployed code is ahead of the database.
+ * The fallback is the slow path on purpose, and stops being used once 042 lands.
  */
-async function fetchMemberStats(supabase: SupabaseClient): Promise<Map<string, MemberStats>> {
-  const byUser = new Map<string, MemberStats>();
+async function fetchUpdateCounts(
+  supabase: SupabaseClient
+): Promise<Map<string, { total: number; completed: number }>> {
+  const byUser = new Map<string, { total: number; completed: number }>();
 
   const { data: rollup, error } = await supabase
     .from("member_update_stats")
-    .select("user_id, update_count, completed_count, projects");
+    .select("user_id, update_count, completed_count");
 
   if (!error) {
     for (const row of rollup || []) {
       byUser.set(row.user_id, {
         total: row.update_count ?? 0,
         completed: row.completed_count ?? 0,
-        projects: row.projects || [],
       });
     }
     return byUser;
   }
 
-  const { data: updates } = await supabase.from("daily_updates").select("user_id, project, status");
+  const { data: updates } = await supabase.from("daily_updates").select("user_id, status");
   for (const u of updates || []) {
-    const entry = byUser.get(u.user_id) || { total: 0, completed: 0, projects: [] as string[] };
+    const entry = byUser.get(u.user_id) || { total: 0, completed: 0 };
     entry.total += 1;
     if (u.status === "Completed") entry.completed += 1;
-    if (u.project && !entry.projects.includes(u.project)) entry.projects.push(u.project);
     byUser.set(u.user_id, entry);
+  }
+  return byUser;
+}
+
+/**
+ * Which projects each person is on.
+ *
+ * Read from member_projects — the same table the profile page's Projects tab
+ * shows, so the roster's count can't disagree with the profile's. That table is
+ * maintained for you: logging project work adds a row if one is missing, and
+ * task-typed work deliberately doesn't (see lib/memberProjects.ts), so tasks
+ * can't appear here at all.
+ *
+ * This replaced a distinct over every row of daily_updates, which counted the
+ * tasks *and* any project someone had logged against without being on it.
+ */
+async function fetchMemberProjects(supabase: SupabaseClient): Promise<Map<string, string[]>> {
+  const byUser = new Map<string, string[]>();
+
+  const { data } = await supabase
+    .from("member_projects")
+    .select("user_id, project")
+    .order("created_at", { ascending: true });
+
+  for (const row of data || []) {
+    const list = byUser.get(row.user_id) || [];
+    // One row per person per project is the norm, but nothing in the schema
+    // enforces it, so don't let a duplicate inflate the count.
+    if (row.project && !list.includes(row.project)) list.push(row.project);
+    byUser.set(row.user_id, list);
   }
   return byUser;
 }
@@ -83,12 +113,13 @@ async function fetchProfiles(supabase: SupabaseClient): Promise<ProfileRow[]> {
 export default async function MembersPage() {
   const supabase = createClient();
 
-  // Concurrent: the roster and the counts don't depend on each other. These
-  // used to be two sequential awaits, which meant the page waited out both
-  // round trips end to end before it could render anything.
-  const [profiles, statsByUser] = await Promise.all([
+  // All three concurrently: none of them depends on another's result. These
+  // used to be sequential awaits, so the page waited out every round trip end
+  // to end before it could render anything.
+  const [profiles, countsByUser, projectsByUser] = await Promise.all([
     fetchProfiles(supabase),
-    fetchMemberStats(supabase),
+    fetchUpdateCounts(supabase),
+    fetchMemberProjects(supabase),
   ]);
 
   const members = profiles
@@ -97,7 +128,10 @@ export default async function MembersPage() {
       // Invited but never signed in. Seeded accounts have no invited_at, so
       // they're never flagged even if they haven't signed in yet.
       pending: !!p.invited_at && !p.signed_in_at,
-      stats: statsByUser.get(p.id) ?? EMPTY_STATS,
+      stats: {
+        ...(countsByUser.get(p.id) ?? { total: 0, completed: 0 }),
+        projects: projectsByUser.get(p.id) ?? EMPTY_STATS.projects,
+      },
     }))
     .sort(compareByRole);
 

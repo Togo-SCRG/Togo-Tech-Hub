@@ -161,12 +161,23 @@ export default function MemberProfilePage() {
     }
   }
 
+  /**
+   * The badge shows the *project's* status, so changing it changes the project's
+   * — the same edit the Projects list and the project's own page make, and
+   * visible to everyone rather than only on this profile. Setting a status that
+   * only this card could see is what made these cards disagree with the rest of
+   * the app in the first place.
+   */
   async function handleProjectStatusChange(p: MemberProjectItem, nextStatus: string) {
-    setMemberProjects((prev) => prev.map((item) => (item.id === p.id ? { ...item, status: nextStatus } : item)));
-    const res = await fetch(`/api/member-projects/${p.id}`, {
+    // Every card for this project, not just the one clicked: one project can be
+    // listed once per person, and they all read the same status.
+    setMemberProjects((prev) =>
+      prev.map((item) => (item.project === p.project ? { ...item, projectStatus: nextStatus } : item))
+    );
+    const res = await fetch("/api/project-settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: nextStatus }),
+      body: JSON.stringify({ project: p.project, status: nextStatus }),
     });
     // The badge was already flipped optimistically above, so without this a
     // rejected change just silently snapped back on the next load().
@@ -439,7 +450,7 @@ export default function MemberProfilePage() {
                       <span className="text-sm font-semibold text-togo-white">{p.project}</span>
                       <div onClick={(e) => e.stopPropagation()}>
                         <StatusBadge
-                          status={p.status}
+                          status={p.projectStatus || p.status}
                           onClick={canEdit ? (s) => handleProjectStatusChange(p, s) : undefined}
                         />
                       </div>

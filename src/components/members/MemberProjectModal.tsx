@@ -50,7 +50,9 @@ export function MemberProjectModal({
   useEffect(() => {
     if (editingProject) {
       setProject(editingProject.project);
-      setStatus(editingProject.status);
+      // The project's status, matching the badge on the card this modal
+      // opened from.
+      setStatus(editingProject.projectStatus || editingProject.status);
       setRole(editingProject.role || "");
       setPartnerIds(editingProject.partnerIds);
     } else {
@@ -102,6 +104,21 @@ export function MemberProjectModal({
         setSaving(false);
         return;
       }
+
+      // The Status field on this form is the project's status, which lives in
+      // project_settings — the same place the card's badge reads from. Written
+      // after the row above so a brand new project has its member_projects entry
+      // first, which is what the database's "are you on this project" check for
+      // setting a status looks at.
+      //
+      // Not fatal if it's refused: the assignment itself saved, and the status
+      // is the one part of this form somebody without rights to the project may
+      // not be allowed to change.
+      await fetch("/api/project-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project: project.trim(), status }),
+      }).catch(() => {});
 
       toast.success(editingProject ? "Project updated." : "Project added.");
       onSaved();
