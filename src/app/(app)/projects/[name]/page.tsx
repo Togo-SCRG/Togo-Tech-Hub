@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
 import { BackButton } from "@/components/layout/BackButton";
 import { ProjectTimeSection } from "@/components/timetracker/ProjectTimeSection";
 import { ProjectTotalLogged } from "@/components/timetracker/ProjectTotalLogged";
@@ -23,11 +24,8 @@ export default async function ProjectDetailPage({ params }: { params: { name: st
   const supabase = createClient();
 
   // Needed to decide whether the viewer may edit the timeline — the same rule
-  // the database enforces.
-  const {
-    data: { user: viewer },
-  } = await supabase.auth.getUser();
-  const viewerId = viewer?.id ?? null;
+  // the database enforces. Cached from the layout's lookup, so it costs nothing.
+  const viewerId = (await getCurrentUser())?.id ?? null;
 
   // Migration 040 may not have run yet, in which case there's no work_type to
   // filter on and every row is project work — which is what it was before 040.

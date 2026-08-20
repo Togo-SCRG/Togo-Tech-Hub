@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { AlertTriangle, ArrowRight, ClipboardList, Plus, Timer } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { capabilitiesFor } from "@/lib/permissions";
-import type { AccessLevel } from "@/types";
+import { getCurrentUser } from "@/lib/auth";
 import { STATUS_OPTIONS, statusHex } from "@/lib/utils";
 import { fetchProjectBlockers } from "@/lib/projectBlockers";
 import { isRealBlocker } from "@/lib/blockers";
@@ -24,25 +23,17 @@ export default async function DashboardPage() {
   const now = new Date();
   const todayStr = now.toISOString().slice(0, 10);
 
-  const {
-    data: { user: viewer },
-  } = await supabase.auth.getUser();
-  const { data: viewerProfile } = viewer
-    ? await supabase.from("profiles").select("access_level").eq("id", viewer.id).single()
-    : { data: null };
+  // One cached lookup instead of getUser + profile + permissions again: the
+  // layout wrapping this page already resolved all three, so this is free.
+  const viewer = await getCurrentUser();
   // Clients watch the team's work rather than adding to it, so the two
   // "log an update" calls to action don't apply to them.
-  const canLogWork = viewerProfile?.access_level !== "client";
+  const canLogWork = !viewer?.isClient;
 
   // A plain user sees only their own work — the same rule /api/updates enforces.
   // Everything update-shaped on this page is scoped by it: the Updates tile, its
   // period counts, and the Recent updates panel.
-  const viewerCaps = await capabilitiesFor(
-    supabase,
-    viewerProfile?.access_level as AccessLevel,
-    viewer?.id
-  );
-  const seesEveryone = viewerCaps.includes("tracker.view.all");
+  const seesEveryone = (viewer?.capabilities || []).includes("tracker.view.all");
   const ownId = viewer?.id ?? "";
 
   const workTypeReady = await hasWorkType(supabase);

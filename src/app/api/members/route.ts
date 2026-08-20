@@ -56,10 +56,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const { data: updates } = await supabase
-    .from("daily_updates")
-    .select("user_id, project, status, date")
-    .order("date", { ascending: false });
+  // No update rows here. This route used to read *every* row of daily_updates,
+  // sort it, and attach each person's five most recent — and nothing consumed
+  // them: everything this endpoint feeds is a picker or a filter, which needs
+  // id/name/avatar/role. The one screen that shows a member's updates is the
+  // profile page, which loads them from /api/members/[id]. So this was a
+  // full-table read, growing with every update logged, on an endpoint that most
+  // pages in the app call on mount.
+  //
+  // MemberItem.updates stays optional on the type for that other route's sake.
 
   // Cast through unknown: the column list is chosen at run time (see the
   // fallback above), so supabase-js can't infer the row shape from it.
@@ -73,10 +78,6 @@ export async function GET(req: NextRequest) {
       bio: p.bio,
       skills: p.skills,
       githubUrl: p.github_url,
-      updates: (updates || [])
-        .filter((u) => u.user_id === p.id)
-        .slice(0, 5)
-        .map((u) => ({ project: u.project, status: u.status, date: u.date })),
     }))
     .sort(compareByRole);
 
