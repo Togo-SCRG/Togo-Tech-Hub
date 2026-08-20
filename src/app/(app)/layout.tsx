@@ -52,7 +52,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       >
         Skip to content
       </a>
-      <Sidebar isAdmin={user.isAdmin} isSuperAdmin={user.isSuperAdmin} isClient={user.isClient} />
+      <Sidebar isAdmin={user.isAdmin} isSuperAdmin={user.isSuperAdmin} isClient={user.isClient} user={user} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar user={user} />
         {/* One container for every page. This used to be each page's own

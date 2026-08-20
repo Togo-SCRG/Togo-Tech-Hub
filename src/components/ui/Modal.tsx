@@ -34,7 +34,13 @@ export function Modal({
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      // An image lightbox opened from inside this dialog sits above it and
+      // registers its own Escape handler. Both listen on `document`, and this
+      // one was attached first, so without this check a single Escape would
+      // dismiss the preview *and* the dialog behind it.
+      if (document.querySelector("[data-lightbox-open]")) return;
+      onClose();
     }
     if (open) document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);

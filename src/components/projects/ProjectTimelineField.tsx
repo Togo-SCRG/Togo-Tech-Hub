@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CalendarClock, CalendarDays, Check, Pencil, X } from "lucide-react";
+import { CalendarClock, CalendarDays, Pencil } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { DatePicker, formatPickedDate } from "@/components/ui/DatePicker";
 import { useToast } from "@/components/ui/Toast";
@@ -13,8 +13,12 @@ import { daysOverdue, isTimelineOverdue } from "@/lib/timeline";
  * The project's target timeline, edited in place from the project header.
  *
  * Free text *and* a calendar: you can type "End of Q3" or "2 sprints", or pick
- * a concrete day. The picker just writes a formatted date into the same text
- * field, so there's one value to store and no mode to switch between.
+ * a concrete day. Both land in the same text value, so there's one thing to
+ * store and no mode to switch between.
+ *
+ * There is no Save/Cancel pair — picking a date commits it, and typed text
+ * commits on Enter or as soon as you click away. Escape still abandons an edit,
+ * which is the only thing the discarded X button did that a click-away doesn't.
  */
 export function ProjectTimelineField({
   projectName,
@@ -86,6 +90,30 @@ export function ProjectTimelineField({
     setPickerOpen(false);
   }
 
+  /**
+   * Clicking away commits, rather than needing a tick button.
+   *
+   * Focus moving *within* the editor is not a click-away — the calendar button
+   * and the day grid both live inside `editorRef`, so tabbing or clicking onto
+   * them must not close the editor out from under the user. An unchanged draft
+   * closes silently: no request, and no "Timeline updated" toast for an edit
+   * that didn't edit anything.
+   */
+  function commitOnBlur(e: React.FocusEvent<HTMLInputElement>) {
+    // Saving already: pressing Enter disables the input, which drops focus and
+    // fires this handler while the PATCH from that Enter is still in flight.
+    // Without this guard that lands as a second identical save.
+    if (saving) return;
+    const movingTo = e.relatedTarget as Node | null;
+    if (movingTo && editorRef.current?.contains(movingTo)) return;
+    if (pickerOpen) return;
+    if (draft.trim() === timeline.trim()) {
+      setEditing(false);
+      return;
+    }
+    save();
+  }
+
   if (editing) {
     return (
       <div ref={editorRef} className="relative flex items-center gap-1.5">
@@ -100,8 +128,10 @@ export function ProjectTimelineField({
             }
             if (e.key === "Escape") cancel();
           }}
+          onBlur={commitOnBlur}
           placeholder="e.g. End of Q3, or pick a date"
           autoFocus
+          disabled={saving}
           className="h-7 w-56 py-1 text-xs"
         />
 
@@ -116,33 +146,17 @@ export function ProjectTimelineField({
           <CalendarDays size={14} />
         </button>
 
-        <button
-          onClick={() => save()}
-          disabled={saving}
-          title="Save timeline"
-          aria-label="Save timeline"
-          className="rounded p-1 text-togo-blue transition-colors hover:bg-togo-blue/10 disabled:opacity-50"
-        >
-          <Check size={14} />
-        </button>
-        <button
-          onClick={cancel}
-          disabled={saving}
-          title="Cancel"
-          aria-label="Cancel"
-          className="rounded p-1 text-togo-faint transition-colors hover:text-togo-muted"
-        >
-          <X size={14} />
-        </button>
-
         {pickerOpen && (
           <div className="animate-fade-in absolute left-0 top-9 z-40">
             <DatePicker
               onSelect={(date) => {
-                // Writes into the same text field rather than saving straight
-                // away, so a picked date can still be edited by hand.
-                setDraft(formatPickedDate(date));
+                // Picking a day is a complete answer on its own, so it saves
+                // rather than staging text behind a second click. Passed
+                // straight to save() because setDraft won't have landed yet.
+                const picked = formatPickedDate(date);
+                setDraft(picked);
                 setPickerOpen(false);
+                save(picked);
               }}
               onCancel={() => setPickerOpen(false)}
             />

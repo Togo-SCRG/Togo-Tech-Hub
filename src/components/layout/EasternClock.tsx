@@ -11,12 +11,13 @@ import { useEffect, useState } from "react";
  * paint is the cost; it lands within a frame.
  *
  * The zone is America/New_York rather than a fixed -05:00 so the offset follows
- * daylight saving, and the label is whatever that zone is actually called right
- * now — EST in winter, EDT in summer. Printing "EST" year-round would be wrong
- * for half of it.
+ * daylight saving. The visible label is just "Mon D · h:mm AM"; the zone (EST in
+ * winter, EDT in summer) and the year are in the tooltip, since spelling them
+ * out inline crowded the topbar.
  */
 export function EasternClock({ className }: { className?: string }) {
   const [label, setLabel] = useState<string | null>(null);
+  const [title, setTitle] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     function tick() {
@@ -24,16 +25,24 @@ export function EasternClock({ className }: { className?: string }) {
       const date = now.toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
-        year: "numeric",
         timeZone: "America/New_York",
       });
       const time = now.toLocaleTimeString("en-US", {
         hour: "numeric",
         minute: "2-digit",
-        timeZoneName: "short",
         timeZone: "America/New_York",
       });
       setLabel(`${date} · ${time}`);
+      // The zone still matters — the team isn't in Eastern — but printing it
+      // inline crowded the topbar, so it moved to the tooltip along with the
+      // year. Hovering still answers "EST or EDT, and which year".
+      setTitle(
+        now.toLocaleString("en-US", {
+          dateStyle: "medium",
+          timeStyle: "short",
+          timeZone: "America/New_York",
+        }) + " Eastern"
+      );
     }
 
     tick();
@@ -46,7 +55,7 @@ export function EasternClock({ className }: { className?: string }) {
   if (!label) return null;
 
   return (
-    <span className={className} suppressHydrationWarning>
+    <span className={className} title={title} suppressHydrationWarning>
       {label}
     </span>
   );

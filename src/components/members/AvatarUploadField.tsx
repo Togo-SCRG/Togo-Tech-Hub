@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { UploadCloud, Eye, Trash2 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
+import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import { Input, Label } from "@/components/ui/Input";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +22,7 @@ export function AvatarUploadField({
   onChange: (url: string) => void;
 }) {
   const [dragOver, setDragOver] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -78,7 +80,7 @@ export function AvatarUploadField({
             <div className="absolute inset-0 rounded-full bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
               <button
                 type="button"
-                onClick={() => window.open(avatarUrl, "_blank", "noopener,noreferrer")}
+                onClick={() => setPreviewOpen(true)}
                 title="View photo"
                 className="flex items-center justify-center h-8 w-8 rounded-full bg-togo-charcoal/90 text-togo-white hover:text-togo-blue transition-colors"
               >
@@ -129,6 +131,19 @@ export function AvatarUploadField({
           {error && <p className="text-xs text-[#EF4444]">{error}</p>}
         </div>
       </div>
+
+      {/* Same viewer the team profile uses, rather than dumping the raw storage
+          URL into a new browser tab — you stay in the form you were filling in,
+          and Escape brings you straight back to it. */}
+      {avatarUrl && (
+        <ImageLightbox
+          open={previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          src={avatarUrl}
+          alt={`${name}'s profile photo`}
+          caption={name}
+        />
+      )}
     </div>
   );
 }

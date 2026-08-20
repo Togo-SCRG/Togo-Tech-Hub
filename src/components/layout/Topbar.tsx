@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Clock } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { ActiveTimerBar } from "@/components/timetracker/ActiveTimerBar";
@@ -29,24 +30,28 @@ export function Topbar({ user }: { user: CurrentUser | null }) {
       {user && <MobileNav isAdmin={user.isAdmin} isSuperAdmin={user.isSuperAdmin} isClient={user.isClient} />}
       <div className="flex min-w-0 items-center gap-3">
         <h1 className="whitespace-nowrap text-base font-bold text-togo-white">{title}</h1>
-        {/* No pill: it read as a control rather than a label sitting next to the
-            page title. Plain muted text now, with the time beside the date. */}
-        <EasternClock className="hidden whitespace-nowrap text-xs text-togo-muted sm:inline" />
       </div>
       <div className="flex-1" />
       {user && (
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <ActiveTimerBar />
+          {/* The theme toggle used to live in the sidebar footer, which now
+              carries the account card instead. Here it sits with the other
+              icon-sized controls. */}
+          <ThemeToggle />
           <NotificationBell />
-          {/* The sidebar carries the labelled theme toggle on desktop; this one
-              only exists for viewports where the sidebar is hidden. */}
-          <div className="md:hidden">
-            <ThemeToggle />
-          </div>
+          {/* Clock icon rather than a bare string, so the date/time reads as a
+              status readout and lines up with the icon buttons beside it. */}
+          <span className="hidden items-center gap-1.5 whitespace-nowrap text-xs text-togo-muted sm:flex">
+            <Clock size={14} className="shrink-0 text-togo-faint" />
+            <EasternClock />
+          </span>
+          {/* Identity lives in the sidebar footer on desktop; this stays for the
+              viewports where the sidebar is hidden. */}
           <Link
             href="/settings"
             title="Your profile and settings"
-            className="flex items-center gap-2.5 rounded-md px-1 py-0.5 transition-colors hover:bg-togo-surface/60"
+            className="flex items-center gap-2.5 rounded-md px-1 py-0.5 transition-colors hover:bg-togo-surface/60 md:hidden"
           >
             <div className="hidden text-right sm:block">
               <div className="text-sm font-bold leading-tight text-togo-white">{user.name}</div>
