@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 function toCamel(row: any) {
@@ -13,9 +14,7 @@ function toCamel(row: any) {
 }
 
 async function requireSuperAdminAndClient(supabase: ReturnType<typeof createClient>, clientId: string) {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(supabase);
   if (!user) {
     return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }

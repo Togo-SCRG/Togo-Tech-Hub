@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { IntentLink } from "@/components/ui/IntentLink";
 import { Pencil } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { toNameCase } from "@/lib/utils";
@@ -31,7 +31,14 @@ export function FeaturedClients({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-bold text-togo-white">Featured Clients</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-bold text-togo-white">Featured Clients</h2>
+          {clients.length > 0 && (
+            <span className="tnum rounded bg-togo-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-togo-muted">
+              {clients.length}
+            </span>
+          )}
+        </div>
         {action}
       </div>
 
@@ -40,38 +47,55 @@ export function FeaturedClients({
           No featured clients yet.
         </div>
       ) : (
-        <div className="flex flex-wrap gap-4">
-          {clients.map((c) => (
-            <Link
-              key={c.id}
-              href={`/members/${c.id}`}
-              className="relative bg-togo-charcoal border border-togo-border rounded-md p-5 flex items-center gap-4 hover:border-togo-blue transition-colors flex-1 min-w-[240px]"
-            >
-              {canManage && (
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onEdit(c);
-                  }}
-                  title="Manage client account"
-                  className="absolute top-3 right-3 text-togo-faint hover:text-togo-blue transition-colors"
+        /* A grid, not a wrapping flex row: with flex-1 cards, whatever didn't
+           fit the first row stretched to fill the second, so the same card came
+           out twice as wide depending on how many clients there were. */
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {clients.map((c) => {
+            const name = toNameCase(c.name);
+            return (
+              <li key={c.id} className="group relative">
+                <IntentLink
+                  href={`/members/${c.id}`}
+                  className="card-hover flex h-full items-center gap-3 rounded-md border border-togo-border bg-togo-surface p-4 hover:border-togo-blue"
                 >
-                  <Pencil size={15} />
-                </button>
-              )}
-              <Avatar name={c.name} avatarUrl={c.avatarUrl} size="lg" className="shrink-0" />
-              {/* Name leads, title supports it — these were the other way round,
-                  which read as though the job title were the person. */}
-              <div className="min-w-0 space-y-0.5">
-                <p className="truncate text-lg font-extrabold leading-tight text-togo-white">
-                  {toNameCase(c.name)}
-                </p>
-                <p className="truncate text-xs font-semibold uppercase tracking-wide text-togo-muted">{c.role}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
+                  <Avatar name={c.name} avatarUrl={c.avatarUrl} size="md" className="!h-12 !w-12 !text-base shrink-0" />
+                  {/* Name leads, title supports it. The title gets two lines
+                      rather than one: job titles run long ("Vice President of
+                      Operations") and cutting them to "VICE PRESIDENT…" lost the
+                      part that says what the person does. pr-6 keeps text clear
+                      of the edit button. */}
+                  <div className="min-w-0 flex-1 pr-6">
+                    <p className="truncate text-[15px] font-bold leading-tight text-togo-white" title={name}>
+                      {name}
+                    </p>
+                    {c.role && (
+                      <p className="mt-1 line-clamp-2 text-xs leading-snug text-togo-muted" title={c.role}>
+                        {c.role}
+                      </p>
+                    )}
+                  </div>
+                </IntentLink>
+
+                {/* A sibling of the link rather than inside it — a button
+                    nested in a link is invalid markup and needed
+                    preventDefault to stop the click from navigating. Shown on
+                    hover or focus; always on touch screens, which can't hover. */}
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => onEdit(c)}
+                    title="Manage client account"
+                    aria-label={`Manage ${name}'s client account`}
+                    className="absolute right-2 top-2 rounded p-1.5 text-togo-faint transition hover:bg-togo-surface-2 hover:text-togo-blue focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );

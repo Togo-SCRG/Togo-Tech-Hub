@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { IntentLink } from "@/components/ui/IntentLink";
 import {
   Archive,
   ArchiveRestore,
@@ -605,7 +605,7 @@ export default function NotificationsPage() {
                 {/* The whole body is the click target — a single project name is
                     a small thing to hit. The action buttons sit outside this
                     link so they don't navigate. */}
-                <Link
+                <IntentLink
                   href={`/projects/${encodeURIComponent(n.project)}`}
                   onClick={() => markOneRead(n)}
                   className="flex min-w-0 flex-1 items-center gap-3"
@@ -651,7 +651,7 @@ export default function NotificationsPage() {
                       {timeAgo(n.createdAt, now)} · {formatDateShort(n.createdAt)}
                     </span>
                   </span>
-                </Link>
+                </IntentLink>
 
                 {/* Revealed on hover on a pointer device, but always present for
                     keyboard and touch — hiding them outright would strand them. */}

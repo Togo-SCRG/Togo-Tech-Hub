@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { IntentLink } from "@/components/ui/IntentLink";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, CalendarDays, Check, FolderPlus, GripVertical, SearchX, Timer, Trash2, X } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
@@ -15,6 +15,8 @@ import { FilterPills } from "@/components/ui/FilterPills";
 import { ViewToggle } from "@/components/ui/ViewToggle";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { SortableHeader } from "@/components/ui/SortableHeader";
+import { LinkListCell } from "@/components/ui/LinkListCell";
+import type { ProposalLinks } from "@/types";
 import { Pagination } from "@/components/ui/Pagination";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { PopoverPortal } from "@/components/ui/PopoverPortal";
@@ -57,6 +59,8 @@ interface ProjectSummary {
   totalMinutes: number;
   /** Unresolved blockers on this project. */
   blockerCount: number;
+  /** When anything last happened on the project (ISO timestamp) — including its creation — or null. */
+  lastActivity: string | null;
   /** Free-text target date, e.g. "End of Q3". */
   timeline: string | null;
   weeklyHourCap: number | null;
@@ -65,12 +69,26 @@ interface ProjectSummary {
 
 type SortKey = "name" | "team" | "time" | "blockers" | "timeline" | "status";
 
+// The list's natural order, before any column-header sort. "Most recent" is the
+// default because the projects people open this page for are the live ones;
+// A–Z is for finding one by name, and "Custom" is the drag-to-reorder order.
+type OrderMode = "recent" | "name" | "custom";
+const ORDER_MODES: { value: OrderMode; label: string }[] = [
+  { value: "recent", label: "Most recent" },
+  { value: "name", label: "Name (A–Z)" },
+  { value: "custom", label: "Custom order" },
+];
+const ORDER_MODE_KEY = "projects-order-mode";
+
 export function ProjectsView({
   projects,
+  links,
   members,
   onCreateProject,
 }: {
   projects: ProjectSummary[];
+  /** Client-portal and system links per project, from its notes (050). */
+  links: Record<string, ProposalLinks>;
   members: { id: string; name: string }[];
   /**
    * Opens the create-project modal, which lives in the tabs wrapper — the
@@ -82,6 +100,7 @@ export function ProjectsView({
   const router = useRouter();
   const toast = useToast();
   const { view, setView, toggleView } = useViewMode("projects-view");
+  const [orderMode, setOrderMode] = useState<OrderMode>("recent");
   const [engineerFilter, setEngineerFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -121,6 +140,17 @@ export function ProjectsView({
   // a failure here shouldn't affect the page.
   useEffect(() => {
     fetch("/api/projects/overdue-check", { method: "POST" }).catch(() => {});
+  }, []);
+
+  // Read after mount, like the view mode, so server and client render the same
+  // markup first.
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(ORDER_MODE_KEY);
+      if (ORDER_MODES.some((m) => m.value === stored)) setOrderMode(stored as OrderMode);
+    } catch {
+      // Storage blocked — "Most recent" for this visit.
+    }
   }, []);
 
   useHotkeys({
@@ -201,7 +231,24 @@ export function ProjectsView({
     `projects-order:${currentUser?.id ?? "anon"}`
   );
 
-  const { sorted: sortedProjects, sort, toggle } = useSort<ProjectSummary, SortKey>(orderedProjects, {
+  // Newest activity first, to the moment — so a project created just now is at
+  // the top. Projects arrive A–Z, so the stable sort leaves exact ties (and
+  // ones with no activity at all, which go last) in alphabetical order.
+  const recentProjects = useMemo(
+    () =>
+      [...filteredProjects].sort((a, b) => {
+        if (a.lastActivity === b.lastActivity) return 0;
+        if (!a.lastActivity) return 1;
+        if (!b.lastActivity) return -1;
+        return a.lastActivity < b.lastActivity ? 1 : -1;
+      }),
+    [filteredProjects]
+  );
+
+  const baseProjects =
+    orderMode === "custom" ? orderedProjects : orderMode === "recent" ? recentProjects : filteredProjects;
+
+  const { sorted: sortedProjects, sort, toggle, clear: clearSort } = useSort<ProjectSummary, SortKey>(baseProjects, {
     name: (p) => p.name,
     team: (p) => p.participants.length,
     time: (p) => p.totalMinutes,
@@ -231,9 +278,22 @@ export function ProjectsView({
     setPage(1);
   }
 
-  // Drag-to-reorder only makes sense in the table's manual order — sorting by
-  // a column overrides it, so the handles are hidden while a sort is active.
-  const reorderable = sort.key === null;
+  // Picking an order is a request to see that order, so it also drops any
+  // column sort that would otherwise keep overriding it.
+  function changeOrderMode(next: OrderMode) {
+    setOrderMode(next);
+    clearSort();
+    setPage(1);
+    try {
+      localStorage.setItem(ORDER_MODE_KEY, next);
+    } catch {
+      // Not remembered across visits, but applied for this one.
+    }
+  }
+
+  // Drag-to-reorder only makes sense in the custom order — a column sort or one
+  // of the automatic orders would override it, so the handles are inert then.
+  const reorderable = orderMode === "custom" && sort.key === null;
 
   function cancelBulkTimeline() {
     setBulkTimelineOpen(false);
@@ -322,8 +382,17 @@ export function ProjectsView({
     { key: "status", label: "Status", className: "w-32" },
   ];
   // "Project" is the row's identity, so it isn't offered as hideable.
-  const TOGGLEABLE = ALL_COLUMNS.filter((c) => c.key !== "name");
+  // The two link columns aren't sortable, so they sit outside ALL_COLUMNS, but
+  // they hide and show from the same Columns menu. They follow the project's
+  // name: they're how you get into it.
+  const TOGGLEABLE = [
+    { key: "portal", label: "Client portal" },
+    { key: "system", label: "System links" },
+    ...ALL_COLUMNS.filter((c) => c.key !== "name"),
+  ];
   const columns = ALL_COLUMNS.filter((c) => c.key === "name" || isVisible(c.key));
+  const showPortal = isVisible("portal");
+  const showSystem = isVisible("system");
 
   return (
     <div className="space-y-4">
@@ -582,6 +651,19 @@ export function ProjectsView({
             </div>
 
             <div className="ml-auto flex items-center gap-2">
+              <Select
+                value={orderMode}
+                onChange={(e) => changeOrderMode(e.target.value as OrderMode)}
+                aria-label="Order projects by"
+                title="Order projects by"
+                className="w-auto"
+              >
+                {ORDER_MODES.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </Select>
               <ViewToggle value={view} onChange={setView} />
               {view === "table" && (
                 <ColumnsMenu columns={TOGGLEABLE} visible={columnVisibility} onToggle={toggleColumn} />
@@ -596,7 +678,7 @@ export function ProjectsView({
             const capPct = weeklyHourCap ? Math.min(100, (hours / weeklyHourCap) * 100) : 0;
             const overCap = weeklyHourCap ? hours > weeklyHourCap : false;
             return (
-              <Link
+              <IntentLink
                 key={name}
                 href={`/projects/${encodeURIComponent(name)}`}
                 className="card-hover flex flex-col gap-3 rounded-md border border-togo-border bg-togo-surface p-4 hover:border-togo-blue"
@@ -672,13 +754,13 @@ export function ProjectsView({
                     <Timer size={12} /> Timer
                   </button>
                 </div>
-              </Link>
+              </IntentLink>
             );
           })}
         </div>
           ) : (
             <div className={`overflow-x-auto ${TEN_ROWS_PY3}`}>
-          <table className="w-full min-w-[640px] text-sm">
+          <table className={cn("w-full text-sm", showPortal || showSystem ? "min-w-[1000px]" : "min-w-[640px]")}>
             <thead className="sticky top-0 z-10 bg-togo-surface">
               <tr className="border-b border-togo-border text-left">
                 {canBulk && (
@@ -695,14 +777,25 @@ export function ProjectsView({
                   <span className="sr-only">Reorder</span>
                 </th>
                 {columns.map((c) => (
-                  <SortableHeader
-                    key={c.key}
-                    label={c.label}
-                    active={sort.key === c.key}
-                    direction={sort.direction}
-                    onClick={() => handleToggleSort(c.key)}
-                    className={c.className}
-                  />
+                  <Fragment key={c.key}>
+                    <SortableHeader
+                      label={c.label}
+                      active={sort.key === c.key}
+                      direction={sort.direction}
+                      onClick={() => handleToggleSort(c.key)}
+                      className={c.className}
+                    />
+                    {c.key === "name" && showPortal && (
+                      <th scope="col" className="section-label w-48 whitespace-nowrap px-4 py-2.5">
+                        Client portal
+                      </th>
+                    )}
+                    {c.key === "name" && showSystem && (
+                      <th scope="col" className="section-label w-48 whitespace-nowrap px-4 py-2.5">
+                        System links
+                      </th>
+                    )}
+                  </Fragment>
                 ))}
               </tr>
             </thead>
@@ -735,19 +828,36 @@ export function ProjectsView({
                         <GripVertical size={14} />
                       </span>
                     ) : (
-                      <span title="Clear the column sort to reorder rows manually" className="inline-flex text-togo-border">
+                      <span
+                        title={
+                          orderMode === "custom"
+                            ? "Clear the column sort to reorder rows manually"
+                            : "Switch to Custom order to reorder rows manually"
+                        }
+                        className="inline-flex text-togo-border"
+                      >
                         <GripVertical size={14} />
                       </span>
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <Link
+                    <IntentLink
                       href={`/projects/${encodeURIComponent(name)}`}
                       className="font-semibold text-togo-white transition-colors hover:text-togo-blue"
                     >
                       {name}
-                    </Link>
+                    </IntentLink>
                   </td>
+                  {showPortal && (
+                    <td className="px-4 py-3">
+                      <LinkListCell hrefs={links[name]?.portal} kind="portal" moreHref={`/projects/${encodeURIComponent(name)}`} />
+                    </td>
+                  )}
+                  {showSystem && (
+                    <td className="px-4 py-3">
+                      <LinkListCell hrefs={links[name]?.system} kind="system" moreHref={`/projects/${encodeURIComponent(name)}`} />
+                    </td>
+                  )}
                   {isVisible("team") && (
                     <td className="px-4 py-3">
                       {participants.length > 0 ? (

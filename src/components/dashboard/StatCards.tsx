@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { IntentLink } from "@/components/ui/IntentLink";
 import {
   AlertTriangle,
   ArrowRight,
@@ -254,7 +254,7 @@ export function StatCards({ cards }: { cards: StatCard[] }) {
               <ul className="max-h-[55vh] divide-y divide-togo-border overflow-y-auto rounded-md border border-togo-border">
                 {active.items.map((item) => (
                   <li key={item.id}>
-                    <Link
+                    <IntentLink
                       href={`/projects/${encodeURIComponent(item.project)}`}
                       className="flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-[var(--togo-hover)]"
                     >
@@ -266,7 +266,7 @@ export function StatCards({ cards }: { cards: StatCard[] }) {
                         <span className="tnum shrink-0 text-[10px] text-togo-faint">{formatDateShort(item.date)}</span>
                       )}
                       <ArrowRight size={12} className="shrink-0 text-togo-faint" />
-                    </Link>
+                    </IntentLink>
                   </li>
                 ))}
               </ul>
@@ -278,13 +278,13 @@ export function StatCards({ cards }: { cards: StatCard[] }) {
                 {groupByProject(active.items).map(([project, items]) => (
                   <li key={project} className="overflow-hidden rounded-md border border-togo-border">
                     <div className="flex items-center justify-between gap-2 border-b border-togo-border bg-togo-surface-2/40 px-3 py-2">
-                      <Link
+                      <IntentLink
                         href={`/projects/${encodeURIComponent(project)}`}
                         className="flex items-center gap-1.5 truncate text-xs font-bold text-togo-white transition-colors hover:text-togo-blue"
                       >
                         {project}
                         <ArrowRight size={11} className="shrink-0 text-togo-faint" />
-                      </Link>
+                      </IntentLink>
                       <span className="tnum shrink-0 rounded bg-togo-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-togo-muted">
                         {items.length}
                       </span>

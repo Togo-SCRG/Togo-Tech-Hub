@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { IntentLink } from "@/components/ui/IntentLink";
 import { Clock, GripVertical, ListTodo, SearchX, Trash2, X, Zap } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -398,7 +398,7 @@ export function TasksView({
           {view === "card" ? (
             <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {paged.map((t) => (
-                <Link
+                <IntentLink
                   key={t.name}
                   href={`/tasks/${encodeURIComponent(t.name)}`}
                   className="card-hover flex flex-col gap-3 rounded-md border border-togo-border bg-togo-surface p-4 hover:border-togo-blue"
@@ -440,7 +440,7 @@ export function TasksView({
                       {t.lastActivity ? formatDateShort(t.lastActivity) : "—"}
                     </span>
                   </div>
-                </Link>
+                </IntentLink>
               ))}
             </div>
           ) : (
@@ -517,12 +517,12 @@ export function TasksView({
                           line height around and made the table read as two
                           different densities. */}
                       <td className="px-4 py-3">
-                        <Link
+                        <IntentLink
                           href={`/tasks/${encodeURIComponent(t.name)}`}
                           className="font-semibold text-togo-white transition-colors hover:text-togo-blue"
                         >
                           {t.name}
-                        </Link>
+                        </IntentLink>
                       </td>
                       {isVisible("people") && (
                         <td className="px-4 py-3">

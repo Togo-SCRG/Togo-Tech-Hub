@@ -25,6 +25,15 @@ const STATUS_STYLES: Record<string, string> = {
     "bg-[var(--status-blocked-bg)] text-[var(--status-blocked-fg)] border-[var(--status-blocked-border)]",
 };
 
+/**
+ * The badge's colour classes for a status (tint, text, border), for anything
+ * else that stands for a status — e.g. status filter tabs — so it reads in the
+ * same colour as the badges it filters. Undefined for an unknown status.
+ */
+export function statusTone(status: string): string | undefined {
+  return STATUS_STYLES[status];
+}
+
 export function StatusBadge({
   status,
   onClick,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomInt } from "crypto";
 import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { invitableLevels } from "@/lib/accessLevels";
 import { capabilitiesFor } from "@/lib/permissions";
@@ -31,9 +32,7 @@ function generatePassword(length = 12): string {
 export async function POST(req: NextRequest) {
   const supabase = createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(supabase);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

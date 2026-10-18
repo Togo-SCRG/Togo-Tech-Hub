@@ -14,9 +14,12 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Handshake,
+  Library,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { clearViewAs } from "@/lib/viewAs";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Avatar } from "@/components/ui/Avatar";
 import { TogoLogo } from "./TogoLogo";
@@ -33,7 +36,7 @@ export interface NavItem {
 // topbar, which carries the unread badge. The /notifications page still exists
 // for the bell's "View all" link.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function getNavItems(isAdmin: boolean, _isSuperAdmin = false, isClient = false): NavItem[] {
+export function getNavItems(isAdmin: boolean, _isSuperAdmin = false, isClient = false, canSeeProposals = false): NavItem[] {
   return [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, section: "menu" as const },
     // One label for everyone. What differs by tier is whose updates you see,
@@ -43,7 +46,15 @@ export function getNavItems(isAdmin: boolean, _isSuperAdmin = false, isClient = 
     // Tasks live here too, as a second tab — they're the other half of the same
     // list, so a separate nav item made them look like a separate concern.
     { href: "/projects", label: "Projects", icon: FolderKanban, section: "menu" as const },
+    // Only for people given access (migration 045). For everyone else the
+    // feature simply isn't there.
+    ...(canSeeProposals
+      ? [{ href: "/proposals", label: "Proposals", icon: Handshake, section: "menu" as const }]
+      : []),
     { href: "/members", label: "Team", icon: Users, section: "menu" as const },
+    // The team's shared files and links (049). Not for clients: it holds
+    // internal systems, and the database refuses them anyway.
+    ...(!isClient ? [{ href: "/resources", label: "Resources", icon: Library, section: "menu" as const }] : []),
     // Everyone can see who holds which tier; only the super admin can change
     // one, which the page itself enforces.
     { href: "/access", label: "Access Levels", icon: ShieldCheck, section: "admin" as const },
@@ -64,7 +75,7 @@ export function Sidebar({
   isClient?: boolean;
   user?: CurrentUser | null;
 }) {
-  const NAV_ITEMS = getNavItems(isAdmin, isSuperAdmin, isClient);
+  const NAV_ITEMS = getNavItems(isAdmin, isSuperAdmin, isClient, !!user?.proposalRole);
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
@@ -86,6 +97,8 @@ export function Sidebar({
   async function handleLogout() {
     setLoggingOut(true);
     const supabase = createClient();
+    // While the session still exists — the route that clears it needs one.
+    await clearViewAs();
     await supabase.auth.signOut();
     router.push("/login");
     router.refresh();
@@ -133,6 +146,11 @@ export function Sidebar({
                   <Link
                     key={item.href}
                     href={item.href}
+                    // Full prefetch, not the default loading-skeleton-only one:
+                    // the page's data is fetched while the sidebar sits there,
+                    // so the click itself has nothing left to wait for. Held for
+                    // staleTimes.static (next.config.js). Production only.
+                    prefetch={true}
                     title={collapsed ? item.label : undefined}
                     aria-current={active ? "page" : undefined}
                     className={cn(

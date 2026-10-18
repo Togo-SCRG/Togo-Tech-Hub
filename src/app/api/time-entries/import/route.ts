@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth";
 import { ensureMemberProject } from "@/lib/memberProjects";
 
 /** One import is one spreadsheet; this is a sanity bound on the payload. */
@@ -27,9 +28,7 @@ interface IncomingRow {
 export async function POST(req: NextRequest) {
   const supabase = createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(supabase);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Menu, X, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { clearViewAs } from "@/lib/viewAs";
 import { cn } from "@/lib/utils";
 import { getNavItems } from "./Sidebar";
 import { TogoLogo } from "./TogoLogo";
@@ -17,12 +18,14 @@ export function MobileNav({
   isAdmin,
   isSuperAdmin = false,
   isClient = false,
+  canSeeProposals = false,
 }: {
   isAdmin: boolean;
   isSuperAdmin?: boolean;
   isClient?: boolean;
+  canSeeProposals?: boolean;
 }) {
-  const NAV_ITEMS = getNavItems(isAdmin, isSuperAdmin, isClient);
+  const NAV_ITEMS = getNavItems(isAdmin, isSuperAdmin, isClient, canSeeProposals);
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -47,6 +50,8 @@ export function MobileNav({
 
   async function handleLogout() {
     const supabase = createClient();
+    // While the session still exists — the route that clears it needs one.
+    await clearViewAs();
     await supabase.auth.signOut();
     router.push("/login");
     router.refresh();
@@ -99,6 +104,8 @@ export function MobileNav({
                   <Link
                     key={item.href}
                     href={item.href}
+                    // Same full prefetch as the desktop sidebar.
+                    prefetch={true}
                     onClick={() => setOpen(false)}
                     aria-current={active ? "page" : undefined}
                     className={cn(

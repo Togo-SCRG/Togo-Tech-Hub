@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
+import { RefreshAfterSave } from "@/components/layout/RefreshAfterSave";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   // Request-scoped: the pages rendered inside this layout ask for the same
@@ -15,6 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen bg-togo-black">
+      <RefreshAfterSave />
       {/* Keyboard users can jump past the sidebar and topbar on every page. */}
       <a
         href="#main-content"

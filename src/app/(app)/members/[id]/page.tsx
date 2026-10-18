@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
+import { IntentLink } from "@/components/ui/IntentLink";
 import {
   AlertTriangle,
   ClipboardList,
@@ -237,11 +237,11 @@ export default function MemberProfilePage() {
             mean two places to keep in step. Editing *someone else's* profile —
             super admin only — still happens in the modal. */}
         {isOwnProfile ? (
-          <Link href="/settings">
+          <IntentLink href="/settings">
             <Button variant="secondary">
               <SettingsIcon size={14} /> Edit profile
             </Button>
-          </Link>
+          </IntentLink>
         ) : (
           canEdit && (
             <Button variant="secondary" onClick={() => setEditOpen(true)}>
@@ -297,9 +297,9 @@ export default function MemberProfilePage() {
               }
               action={
                 isOwnProfile ? (
-                  <Link href="/settings">
+                  <IntentLink href="/settings">
                     <Button size="sm">Edit profile</Button>
-                  </Link>
+                  </IntentLink>
                 ) : canEdit ? (
                   <Button size="sm" onClick={() => setEditOpen(true)}>
                     Edit profile
@@ -370,9 +370,9 @@ export default function MemberProfilePage() {
               }
               action={
                 isOwnProfile ? (
-                  <Link href="/daily-updates?logUpdate=1">
+                  <IntentLink href="/daily-updates?logUpdate=1">
                     <Button size="sm">Log an update</Button>
-                  </Link>
+                  </IntentLink>
                 ) : undefined
               }
             />
@@ -462,7 +462,7 @@ export default function MemberProfilePage() {
                           const partner = resolvePartner(id);
                           if (!partner) return null;
                           return (
-                            <Link
+                            <IntentLink
                               key={id}
                               href={`/members/${id}`}
                               onClick={(e) => e.stopPropagation()}
@@ -470,7 +470,7 @@ export default function MemberProfilePage() {
                             >
                               <Avatar name={partner.name} avatarUrl={partner.avatarUrl} size="sm" />
                               {partner.name}
-                            </Link>
+                            </IntentLink>
                           );
                         })}
                       </div>

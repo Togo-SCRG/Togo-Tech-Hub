@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { IntentLink } from "@/components/ui/IntentLink";
 import { ArrowRight, FolderKanban } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { ProgressBar } from "@/components/ui/ProgressBar";
@@ -35,12 +35,12 @@ export function ActiveProjectsPanel({ projects }: { projects: ActiveProjectRow[]
     <div className="flex flex-col overflow-hidden rounded-md border border-togo-border bg-togo-surface">
       <div className="flex items-center justify-between border-b border-togo-border px-4 py-2.5">
         <span className="text-xs font-medium text-togo-muted">Active projects</span>
-        <Link
+        <IntentLink
           href="/projects"
           className="flex items-center gap-1 text-[11px] text-togo-faint transition-colors hover:text-togo-blue"
         >
           All <ArrowRight size={11} />
-        </Link>
+        </IntentLink>
       </div>
 
       <div>
@@ -53,7 +53,7 @@ export function ActiveProjectsPanel({ projects }: { projects: ActiveProjectRow[]
           />
         ) : (
           paged.map((p) => (
-            <Link
+            <IntentLink
               key={p.name}
               href={`/projects/${encodeURIComponent(p.name)}`}
               className="flex items-center gap-2 border-t border-togo-border px-4 py-2 transition-colors hover:bg-[var(--togo-hover)]"
@@ -71,7 +71,7 @@ export function ActiveProjectsPanel({ projects }: { projects: ActiveProjectRow[]
                 {statusProgress(p.status)}%
               </span>
               <StatusBadge status={p.status} />
-            </Link>
+            </IntentLink>
           ))
         )}
       </div>

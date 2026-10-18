@@ -1,5 +1,20 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    // How long the browser reuses a page it has already loaded or prefetched,
+    // in seconds. Next's default for these pages is 30s, so going back to one
+    // after half a minute rebuilt it from scratch — several Supabase round
+    // trips — and every click felt like a first visit.
+    //
+    // Your own saves still show straight away: RefreshAfterSave empties this
+    // cache after any write. What can lag by up to this long is a teammate's
+    // change, until you reload or save something yourself.
+    staleTimes: {
+      dynamic: 180,
+      static: 180,
+    },
+  },
+
   images: {
     remotePatterns: [
       {

@@ -52,8 +52,8 @@ export const CAPABILITIES: CapabilityInfo[] = [
   {
     key: "project.docs.edit",
     group: "Projects",
-    label: "Edit overview & PRD",
-    hint: "Including uploading and removing the PRD file",
+    label: "Edit overview, documents & notes",
+    hint: "Including uploading and removing documents, and adding or editing side notes",
   },
   {
     key: "project.hourcap.edit",
