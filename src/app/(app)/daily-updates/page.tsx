@@ -30,7 +30,40 @@ import { useHotkeys } from "@/lib/useHotkeys";
 import { useSort } from "@/lib/useSort";
 import { useViewMode } from "@/lib/useViewMode";
 import { useColumns } from "@/lib/useColumns";
+import { fetchJson, peekJson } from "@/lib/jsonCache";
 import type { CurrentUser, DailyUpdateItem, MemberItem } from "@/types";
+
+type MeResponse = { user: CurrentUser | null };
+type MembersResponse = { members: MemberItem[] };
+type ProjectsResponse = { projects?: string[]; tasks?: string[] };
+type UpdatesResponse = { updates: DailyUpdateItem[] };
+type EntriesResponse = { entries: { userId: string; project: string; date: string; durationMinutes: number }[] };
+
+const ME_URL = "/api/auth/me";
+const MEMBERS_URL = "/api/members";
+const PROJECTS_URL = "/api/projects";
+const updatesUrl = (from: string, to: string) => `/api/updates?from=${from}&to=${to}`;
+const entriesUrl = (from: string, to: string) => `/api/time-entries?from=${from}&to=${to}`;
+
+// Minutes per (user, project) within the selected date range — these entries
+// are fetched for the same from/to as the updates, so this is "hours this
+// person logged on this project in the visible range". Previously keyed on the
+// exact date too, which only matched when time was logged on the same day as
+// the update, leaving Hrs empty almost always.
+function minutesByUserProject(entries: EntriesResponse["entries"]): Record<string, number> {
+  const map: Record<string, number> = {};
+  for (const e of entries) {
+    const key = `${e.userId}|${e.project}`;
+    map[key] = (map[key] || 0) + e.durationMinutes;
+  }
+  return map;
+}
+
+// A tier without "see everyone's tasks" is pinned to their own work. The server
+// enforces the same thing, so this only decides the default the filter opens on.
+function defaultEngineerFilter(user: CurrentUser | null | undefined): string {
+  return user && !can(user.capabilities, "tracker.view.all") ? user.id : "all";
+}
 
 const STATUS_PILLS: { label: string; value: string }[] = [
   { label: "All", value: "all" },
@@ -63,20 +96,32 @@ export default function TrackerPage() {
   const [dateTo, setDateTo] = useState(today);
   const [datePreset, setDatePreset] = useState<DatePreset>("today");
   const { view, setView, toggleView } = useViewMode("tracker-view");
-  const [updates, setUpdates] = useState<DailyUpdateItem[]>([]);
-  const [minutesByKey, setMinutesByKey] = useState<Record<string, number>>({});
-  const [members, setMembers] = useState<MemberItem[]>([]);
-  const [projectNames, setProjectNames] = useState<string[]>([]);
-  const [taskNames, setTaskNames] = useState<string[]>([]);
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  // A return visit starts from what the last one loaded (see lib/jsonCache), so
+  // the page draws at once instead of behind a skeleton; the fetches below then
+  // bring it up to date. A first visit has nothing cached and loads as before.
+  const [cachedAtMount] = useState(() => ({
+    me: peekJson<MeResponse>(ME_URL),
+    members: peekJson<MembersResponse>(MEMBERS_URL),
+    projects: peekJson<ProjectsResponse>(PROJECTS_URL),
+    updates: peekJson<UpdatesResponse>(updatesUrl(today, today)),
+    entries: peekJson<EntriesResponse>(entriesUrl(today, today)),
+  }));
+  const [updates, setUpdates] = useState<DailyUpdateItem[]>(cachedAtMount.updates?.updates ?? []);
+  const [minutesByKey, setMinutesByKey] = useState<Record<string, number>>(() =>
+    cachedAtMount.entries ? minutesByUserProject(cachedAtMount.entries.entries) : {}
+  );
+  const [members, setMembers] = useState<MemberItem[]>(cachedAtMount.members?.members ?? []);
+  const [projectNames, setProjectNames] = useState<string[]>(cachedAtMount.projects?.projects ?? []);
+  const [taskNames, setTaskNames] = useState<string[]>(cachedAtMount.projects?.tasks ?? []);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(cachedAtMount.me?.user ?? null);
+  const [loading, setLoading] = useState(!(cachedAtMount.me && cachedAtMount.members && cachedAtMount.projects));
   const [refreshing, setRefreshing] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [editingUpdate, setEditingUpdate] = useState<DailyUpdateItem | null>(null);
   const [viewingUpdate, setViewingUpdate] = useState<DailyUpdateItem | null>(null);
   const [modalMode, setModalMode] = useState<"log" | "add">("log");
-  const [engineerFilter, setEngineerFilter] = useState("all");
+  const [engineerFilter, setEngineerFilter] = useState(() => defaultEngineerFilter(cachedAtMount.me?.user));
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
@@ -85,64 +130,44 @@ export default function TrackerPage() {
   const [deleting, setDeleting] = useState(false);
 
   const loadUpdates = useCallback(async () => {
+    // A range visited earlier this session shows at once while it refreshes.
+    const cachedUpdates = peekJson<UpdatesResponse>(updatesUrl(dateFrom, dateTo));
+    const cachedEntries = peekJson<EntriesResponse>(entriesUrl(dateFrom, dateTo));
+    if (cachedUpdates) setUpdates(cachedUpdates.updates);
+    if (cachedEntries) setMinutesByKey(minutesByUserProject(cachedEntries.entries));
+
     setRefreshing(true);
-    const [updatesRes, timeRes] = await Promise.all([
-      fetch(`/api/updates?from=${dateFrom}&to=${dateTo}`),
-      fetch(`/api/time-entries?from=${dateFrom}&to=${dateTo}`),
+    const [updatesData, entriesData] = await Promise.all([
+      fetchJson<UpdatesResponse>(updatesUrl(dateFrom, dateTo)),
+      fetchJson<EntriesResponse>(entriesUrl(dateFrom, dateTo)),
     ]);
-    if (updatesRes.ok) {
-      const data = await updatesRes.json();
-      setUpdates(data.updates);
-    }
-    if (timeRes.ok) {
-      const data = await timeRes.json();
-      // Minutes per (user, project) within the selected date range — these
-      // entries are fetched for the same from/to as the updates, so this is
-      // "hours this person logged on this project in the visible range".
-      // Previously keyed on the exact date too, which only matched when time
-      // was logged on the same day as the update, leaving Hrs empty almost
-      // always.
-      const map: Record<string, number> = {};
-      for (const e of data.entries as { userId: string; project: string; date: string; durationMinutes: number }[]) {
-        const key = `${e.userId}|${e.project}`;
-        map[key] = (map[key] || 0) + e.durationMinutes;
-      }
-      setMinutesByKey(map);
-    }
+    if (updatesData) setUpdates(updatesData.updates);
+    if (entriesData) setMinutesByKey(minutesByUserProject(entriesData.entries));
     setRefreshing(false);
   }, [dateFrom, dateTo]);
 
   useEffect(() => {
     async function init() {
-      setLoading(true);
-      const [meRes, membersRes, projectsRes] = await Promise.all([
-        fetch("/api/auth/me"),
-        fetch("/api/members"),
-        fetch("/api/projects"),
+      const [meData, membersData, projectsData] = await Promise.all([
+        fetchJson<MeResponse>(ME_URL),
+        fetchJson<MembersResponse>(MEMBERS_URL),
+        fetchJson<ProjectsResponse>(PROJECTS_URL),
       ]);
-      if (meRes.ok) {
-        const meData = await meRes.json();
+      if (meData) {
         setCurrentUser(meData.user);
-        // A tier without "see everyone's tasks" is pinned to their own work.
-        // The server enforces the same thing, so this only decides the default
-        // the filter opens on.
-        if (meData.user && !can(meData.user.capabilities, "tracker.view.all")) {
-          setEngineerFilter(meData.user.id);
-        }
+        // Only when the filter wasn't already set from the cached user — by now
+        // the viewer may have picked a different engineer themselves.
+        if (!cachedAtMount.me) setEngineerFilter(defaultEngineerFilter(meData.user));
       }
-      if (membersRes.ok) {
-        const membersData = await membersRes.json();
-        setMembers(membersData.members);
-      }
-      if (projectsRes.ok) {
-        const projectsData = await projectsRes.json();
+      if (membersData) setMembers(membersData.members);
+      if (projectsData) {
         setProjectNames(projectsData.projects || []);
         setTaskNames(projectsData.tasks || []);
       }
       setLoading(false);
     }
     init();
-  }, []);
+  }, [cachedAtMount]);
 
   useEffect(() => {
     loadUpdates();

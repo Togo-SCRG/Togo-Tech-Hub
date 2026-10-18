@@ -1,10 +1,11 @@
 "use client";
 
-import { Calendar, FolderKanban } from "lucide-react";
+import { Calendar, FolderKanban, Zap } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Avatar } from "@/components/ui/Avatar";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Button } from "@/components/ui/Button";
+import { LinkifiedText } from "@/components/ui/LinkifiedText";
 import { formatDate } from "@/lib/utils";
 import { isRealBlocker } from "@/lib/blockers";
 import type { DailyUpdateItem } from "@/types";
@@ -27,6 +28,7 @@ export function UpdateDetailModal({
   update: DailyUpdateItem | null;
 }) {
   if (!update) return null;
+  const WorkIcon = update.workType === "task" ? Zap : FolderKanban;
 
   return (
     <Modal open={open} onClose={onClose} title="Update details" className="max-w-2xl">
@@ -42,7 +44,7 @@ export function UpdateDetailModal({
 
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-md border border-togo-border bg-togo-surface-2/40 px-3 py-2.5">
           <span className="flex items-center gap-1.5 text-xs text-togo-white">
-            <FolderKanban size={13} className="shrink-0 text-togo-faint" />
+            <WorkIcon size={13} className="shrink-0 text-togo-faint" />
             {update.project}
           </span>
           <span className="flex items-center gap-1.5 text-xs text-togo-muted">
@@ -72,6 +74,8 @@ export function UpdateDetailModal({
 /**
  * `whitespace-pre-line` because these are bullet lists typed with real
  * newlines — collapsing them would run every bullet into one paragraph.
+ * Links are clickable, and a long unbroken string (usually a pasted URL) wraps
+ * instead of pushing the modal wider.
  */
 function Field({
   label,
@@ -90,11 +94,11 @@ function Field({
         <p
           className={
             danger
-              ? "whitespace-pre-line text-sm leading-relaxed text-[var(--status-blocked-fg)]"
-              : "whitespace-pre-line text-sm leading-relaxed text-togo-white"
+              ? "whitespace-pre-line text-sm leading-relaxed text-[var(--status-blocked-fg)] [overflow-wrap:anywhere]"
+              : "whitespace-pre-line text-sm leading-relaxed text-togo-white [overflow-wrap:anywhere]"
           }
         >
-          {text}
+          <LinkifiedText text={text} />
         </p>
       ) : (
         <p className="text-sm italic text-togo-faint">Nothing recorded</p>

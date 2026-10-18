@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 const OFFICE_EXTENSIONS = ["doc", "docx", "ppt", "pptx", "xls", "xlsx"];
 
 // Read and rendered by us rather than handed to the browser. Two reasons, both
-// visible on a .md PRD: an iframe is a separate document, so the app's
+// visible on a .md document: an iframe is a separate document, so the app's
 // scrollbar styling (globals.css) can't reach inside it and you get the OS
 // default; and the browser guesses the encoding of a text/plain response,
 // which turns every em dash in a UTF-8 file into "â€"". Decoding explicitly
@@ -30,7 +30,8 @@ function getExtension(fileName: string) {
   return fileName.split(".").pop()?.toLowerCase() || "";
 }
 
-export function PrdPreviewModal({
+/** A project document, shown in place. Was the PRD preview; any document type works the same way. */
+export function DocumentPreviewModal({
   open,
   onClose,
   fileName,
@@ -92,8 +93,8 @@ export function PrdPreviewModal({
 
   return (
     <Modal open={open} onClose={onClose} title={fileName} className="max-w-4xl">
-      {/* Source stays one click away for an HTML PRD — it's occasionally the
-          thing you actually want, and it was all you got before. */}
+      {/* Source stays one click away for an HTML document — it's occasionally
+          the thing you actually want. */}
       {isHtmlDoc && !fetchFailed && (
         <div className="mb-3 flex items-center gap-1 rounded-md border border-togo-border p-0.5 w-fit">
           {[
@@ -125,8 +126,8 @@ export function PrdPreviewModal({
           </div>
         ) : renderedHtml ? (
           // `sandbox` with no allow-* tokens: no scripts, no access to this
-          // origin, no form submission, no navigating the tab away. A PRD is a
-          // document, and uploaded HTML is untrusted content — its own CSS,
+          // origin, no form submission, no navigating the tab away. A document
+          // is a document, and uploaded HTML is untrusted content — its own CSS,
           // fonts and images still load, which is all it needs to look right.
           <iframe
             srcDoc={text ?? ""}

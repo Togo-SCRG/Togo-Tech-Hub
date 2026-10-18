@@ -25,10 +25,12 @@ type Tab = "projects" | "tasks";
  */
 export function ProjectsTabs({
   projects,
+  links,
   members,
   tasks,
 }: {
   projects: React.ComponentProps<typeof ProjectsView>["projects"];
+  links: React.ComponentProps<typeof ProjectsView>["links"];
   members: React.ComponentProps<typeof ProjectsView>["members"];
   tasks: TaskRow[];
 }) {
@@ -111,6 +113,7 @@ export function ProjectsTabs({
       {tab === "projects" ? (
         <ProjectsView
           projects={projects}
+          links={links}
           members={members}
           onCreateProject={() => setCreateProjectOpen(true)}
         />

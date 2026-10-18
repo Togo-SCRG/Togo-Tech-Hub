@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth";
 
 // Renaming a project rewrites its name across five tables, so the work happens
 // in one database function (migration 037) rather than five calls from here —
@@ -11,9 +12,7 @@ import { createClient } from "@/lib/supabase/server";
 export async function POST(req: NextRequest, { params }: { params: { name: string } }) {
   const supabase = createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(supabase);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

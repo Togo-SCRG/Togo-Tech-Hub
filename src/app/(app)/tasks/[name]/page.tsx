@@ -5,7 +5,8 @@ import { BackButton } from "@/components/layout/BackButton";
 import { Avatar } from "@/components/ui/Avatar";
 import { PhaseBadge } from "@/components/timetracker/PhaseBadge";
 import { TaskDescription } from "@/components/tasks/TaskDescription";
-import { ProjectActivityFeed, type ActivityEvent } from "@/components/projects/ProjectActivityFeed";
+import { ProjectActivityFeed } from "@/components/projects/ProjectActivityFeed";
+import { sortActivity, timeActivity, updateActivity } from "@/lib/activity";
 import { hasTasksTable, hasWorkType } from "@/lib/schemaSupport";
 import { formatDateShort, formatMinutes } from "@/lib/utils";
 
@@ -26,7 +27,11 @@ export default async function TaskDetailPage({ params }: { params: { name: strin
   const [{ data: updates }, { data: timeEntries }, declared] = await Promise.all([
     supabase
       .from("daily_updates")
-      .select("id, update, status, date, created_at, user_id, profiles(name, avatar_url)")
+      // The full update, not just its first line: the activity feed opens each
+      // one in a read-only preview.
+      .select(
+        "id, project, work_type, update, whats_left, blockers, status, date, created_at, updated_at, user_id, profiles(id, name, avatar_url, role)"
+      )
       .eq("project", taskName)
       .eq("work_type", "task")
       .order("date", { ascending: false }),
@@ -67,27 +72,7 @@ export default async function TaskDetailPage({ params }: { params: { name: strin
   const peopleList = [...people.values()].sort((a, b) => b.minutes - a.minutes);
 
   const ACTIVITY_LIMIT = 25;
-  const activityEvents: ActivityEvent[] = [
-    ...allUpdates.map((u) => ({
-      id: u.id as string,
-      kind: "update" as const,
-      userName: (u.profiles as unknown as { name?: string } | null)?.name || "Someone",
-      date: u.date as string,
-      at: (u.created_at as string) || (u.date as string),
-      status: u.status as string,
-      text: (u.update as string) || null,
-    })),
-    ...allEntries.map((t) => ({
-      id: t.id as string,
-      kind: "time" as const,
-      userName: (t.profiles as unknown as { name?: string } | null)?.name || "Someone",
-      date: t.date as string,
-      at: (t.created_at as string) || (t.date as string),
-      minutes: t.duration_minutes as number,
-      phase: (t.phase as string) || null,
-      text: (t.note as string) || null,
-    })),
-  ].sort((a, b) => b.at.localeCompare(a.at));
+  const activityEvents = sortActivity([...allUpdates.map(updateActivity), ...allEntries.map(timeActivity)]);
 
   const lastActivity = activityEvents[0]?.date ?? null;
 

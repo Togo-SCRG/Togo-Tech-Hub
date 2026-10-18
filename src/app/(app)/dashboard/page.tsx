@@ -12,6 +12,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { RecentUpdatesPanel, type RecentUpdateRow } from "@/components/dashboard/RecentUpdatesPanel";
 import { ActiveProjectsPanel } from "@/components/dashboard/ActiveProjectsPanel";
 import { StatCards, type StatCard, type StatIcon, type StatItem } from "@/components/dashboard/StatCards";
+import { QuickLinksPanel } from "@/components/dashboard/QuickLinksPanel";
+import { fetchResourceLinks } from "@/lib/resources";
 
 function hoursLabel(minutes: number): string {
   if (!minutes) return "—";
@@ -46,6 +48,7 @@ export default async function DashboardPage() {
     { data: projectSettings },
     { data: openBlockers },
     standaloneBlockers,
+    resourceLinks,
   ] = await Promise.all([
     // project/update/author as well as the status: the stat cards open a list of
     // what's behind each number, which a bare count can't provide.
@@ -89,7 +92,13 @@ export default async function DashboardPage() {
     // same tile as the ones above — from the dashboard's point of view a blocker
     // is a blocker, whichever way it was raised.
     fetchProjectBlockers(supabase),
+    // Quick links (049): the official website for everyone, pinned links for
+    // the team — the policies return a client only the official one.
+    fetchResourceLinks(supabase),
   ]);
+
+  const officialLink = resourceLinks.links.find((l) => l.isOfficial) ?? null;
+  const pinnedLinks = resourceLinks.links.filter((l) => l.pinned && !l.isOfficial).slice(0, 6);
 
   const today = todayUpdates || [];
   const todayVisible = today.filter((u) => seesEveryone || u.user_id === ownId);
@@ -341,8 +350,19 @@ export default async function DashboardPage() {
         </div>
 
         {/* Right column. Both panels now page at 10 rows, so the two columns end
-            level without either being stretched to match the other. */}
-        <ActiveProjectsPanel projects={activeProjects.map((p) => ({ name: p.name, status: p.status }))} />
+            level without either being stretched to match the other. Quick
+            links sit above: short, and the first thing people reach for. */}
+        <div className="space-y-3">
+          {resourceLinks.ready && (
+            <QuickLinksPanel
+              official={officialLink}
+              pinned={pinnedLinks}
+              isTeam={!viewer?.isClient}
+              isAdmin={!!(viewer?.isAdmin || viewer?.isSuperAdmin)}
+            />
+          )}
+          <ActiveProjectsPanel projects={activeProjects.map((p) => ({ name: p.name, status: p.status }))} />
+        </div>
       </div>
     </div>
   );

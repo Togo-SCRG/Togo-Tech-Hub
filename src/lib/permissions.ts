@@ -4,6 +4,47 @@ import type { AccessLevel } from "@/types";
 
 const ALL = CAPABILITIES.map((c) => c.key as string);
 
+type CapabilityRow = { capability: string; allowed: boolean };
+
+/**
+ * The capability list from matrix rows already read — the part of
+ * capabilitiesFor that doesn't touch the database, shared with getCurrentUser
+ * (lib/auth.ts), which reads the rows alongside the profile in one round trip.
+ *
+ * `matrix` may hold every tier's rows; only `accessLevel`'s count. A null
+ * `matrix` means the table couldn't be read.
+ */
+export function resolveCapabilities(
+  accessLevel: AccessLevel | null | undefined,
+  matrix: (CapabilityRow & { access_level?: string })[] | null,
+  overrides: CapabilityRow[] | null
+): string[] {
+  if (!accessLevel) return [];
+  // The super admin is never gated, matching has_permission().
+  if (accessLevel === "super_admin") return ALL;
+
+  // Before migration 032 the table doesn't exist. Falling back to "everything"
+  // keeps the app usable in that window — the database is still enforcing the
+  // pre-matrix rules, so controls that shouldn't work simply error on save
+  // rather than silently vanishing for every tier at once.
+  if (!matrix) return ALL;
+
+  const granted = new Set(
+    matrix
+      .filter((r) => r.allowed && (r.access_level ?? accessLevel) === accessLevel)
+      .map((r) => r.capability)
+  );
+
+  // Per-person overrides (033) win over the tier, in both directions: a row
+  // with allowed = false is a real deny, which is why this can't just union.
+  for (const row of overrides || []) {
+    if (row.allowed) granted.add(row.capability);
+    else granted.delete(row.capability);
+  }
+
+  return [...granted];
+}
+
 /**
  * The capabilities a tier holds, read from the permission matrix.
  *
@@ -32,20 +73,5 @@ export async function capabilitiesFor(
       : Promise.resolve({ data: null }),
   ]);
 
-  // Before migration 032 the table doesn't exist. Falling back to "everything"
-  // keeps the app usable in that window — the database is still enforcing the
-  // pre-matrix rules, so controls that shouldn't work simply error on save
-  // rather than silently vanishing for every tier at once.
-  if (error) return ALL;
-
-  const granted = new Set((data || []).filter((r) => r.allowed).map((r) => r.capability as string));
-
-  // Per-person overrides (033) win over the tier, in both directions: a row
-  // with allowed = false is a real deny, which is why this can't just union.
-  for (const row of overrideResult.data || []) {
-    if (row.allowed) granted.add(row.capability as string);
-    else granted.delete(row.capability as string);
-  }
-
-  return [...granted];
+  return resolveCapabilities(accessLevel, error ? null : data || [], overrideResult.data);
 }

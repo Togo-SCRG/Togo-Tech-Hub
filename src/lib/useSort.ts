@@ -32,6 +32,11 @@ export function useSort<T, K extends string>(
     );
   }
 
+  /** Drop any column sort, back to the items' natural order. */
+  function clear() {
+    setSort({ key: null, direction: "asc" });
+  }
+
   const sorted = useMemo(() => {
     if (!sort.key) return items;
     const accessor = accessors[sort.key];
@@ -54,5 +59,5 @@ export function useSort<T, K extends string>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, sort.key, sort.direction]);
 
-  return { sorted, sort, toggle };
+  return { sorted, sort, toggle, clear };
 }

@@ -4,6 +4,7 @@ import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { clearViewAs } from "@/lib/viewAs";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { Input, Label } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -29,6 +30,10 @@ export default function LoginPage() {
       setLoading(false);
       return;
     }
+
+    // A "View as" preview left behind on this browser would make the app
+    // read-only for whoever just signed in.
+    await clearViewAs();
 
     router.push("/dashboard");
     router.refresh();

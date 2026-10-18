@@ -12,10 +12,12 @@ import { ProjectStatusBadge } from "@/components/projects/ProjectStatusBadge";
 import { ProjectNameField } from "@/components/projects/ProjectNameField";
 import { ProjectTimelineField } from "@/components/projects/ProjectTimelineField";
 import { ProjectBlockers } from "@/components/projects/ProjectBlockers";
-import { ProjectActivityFeed, type ActivityEvent } from "@/components/projects/ProjectActivityFeed";
+import { ProjectActivityFeed } from "@/components/projects/ProjectActivityFeed";
+import { sortActivity, timeActivity, updateActivity } from "@/lib/activity";
 import { DeleteProjectButton } from "@/components/projects/DeleteProjectButton";
 import { formatDateShort, formatMinutes, getWeekRange } from "@/lib/utils";
 import { fetchProjectBlockers } from "@/lib/projectBlockers";
+import { fetchProjectDocuments, fetchProjectSideNotes } from "@/lib/projectDocs";
 import { isRealBlocker } from "@/lib/blockers";
 import { hasWorkType, onlyProjectWork } from "@/lib/schemaSupport";
 
@@ -37,6 +39,8 @@ export default async function ProjectDetailPage({ params }: { params: { name: st
     { data: timeEntries },
     { data: projectSettings },
     standaloneBlockers,
+    projectDocuments,
+    sideNotes,
   ] = await Promise.all([
       supabase
         .from("member_projects")
@@ -53,11 +57,12 @@ export default async function ProjectDetailPage({ params }: { params: { name: st
         workTypeReady
       ).order("date", { ascending: false }),
       // Joined to profiles and carrying phase/note so the activity feed can
-      // show "Ed logged 2h on Dev" alongside the daily updates.
+      // show "Ed logged 2h on Dev" alongside the daily updates, and the avatar
+      // for the time entry's preview.
       onlyProjectWork(
         supabase
           .from("time_entries")
-          .select("id, user_id, duration_minutes, date, phase, note, created_at, profiles(name)")
+          .select("id, user_id, duration_minutes, date, phase, note, created_at, profiles(name, avatar_url)")
           .eq("project", projectName),
         workTypeReady
       ).order("date", { ascending: false }),
@@ -75,6 +80,9 @@ export default async function ProjectDetailPage({ params }: { params: { name: st
       // Blockers raised against the project itself, rather than carried on a
       // daily update. Tolerates migration 038 not having been run yet.
       fetchProjectBlockers(supabase, projectName),
+      // Both tolerate migration 044 not having been run yet (ready: false).
+      fetchProjectDocuments(supabase, projectName),
+      fetchProjectSideNotes(supabase, projectName),
     ]);
 
   // Mirror the projects-list inclusion logic: a project is "real" if it
@@ -179,27 +187,7 @@ export default async function ProjectDetailPage({ params }: { params: { name: st
   // One history stream from two tables. Rendering every event would mean
   // hundreds of rows on a long-running project, so cap it and report the total.
   const ACTIVITY_LIMIT = 25;
-  const activityEvents: ActivityEvent[] = [
-    ...allUpdates.map((u) => ({
-      id: u.id as string,
-      kind: "update" as const,
-      userName: u.profiles?.name || "Someone",
-      date: u.date as string,
-      at: (u.created_at as string) || (u.date as string),
-      status: u.status as string,
-      text: (u.update as string) || (u.blockers as string) || null,
-    })),
-    ...allTimeEntries.map((t) => ({
-      id: t.id as string,
-      kind: "time" as const,
-      userName: (t.profiles as unknown as { name?: string } | null)?.name || "Someone",
-      date: t.date as string,
-      at: (t.created_at as string) || (t.date as string),
-      minutes: t.duration_minutes as number,
-      phase: (t.phase as string) || null,
-      text: (t.note as string) || null,
-    })),
-  ].sort((a, b) => b.at.localeCompare(a.at));
+  const activityEvents = sortActivity([...allUpdates.map(updateActivity), ...allTimeEntries.map(timeActivity)]);
 
   const projectStatus = projectSettings?.status || "Not Started";
   const viewerIsProjectMember = participantList.some((p) => p.userId === viewerId);
@@ -255,7 +243,9 @@ export default async function ProjectDetailPage({ params }: { params: { name: st
           <ProjectDocs
             projectName={projectName}
             initialOverview={projectSettings?.overview ?? ""}
-            initialPrd={projectSettings?.prd ?? ""}
+            legacyRequirements={projectSettings?.prd ?? ""}
+            initialDocuments={projectDocuments.documents}
+            documentsReady={projectDocuments.ready}
             isProjectMember={viewerIsProjectMember}
           />
 
@@ -263,7 +253,9 @@ export default async function ProjectDetailPage({ params }: { params: { name: st
               need the width to stay readable. */}
           <ProjectSideNotes
             projectName={projectName}
-            initialNote={projectSettings?.side_note ?? ""}
+            initialNotes={sideNotes.notes}
+            ready={sideNotes.ready}
+            legacyNote={projectSettings?.side_note ?? ""}
             isProjectMember={viewerIsProjectMember}
           />
 

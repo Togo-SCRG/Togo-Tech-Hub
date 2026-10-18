@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notify } from "@/lib/notifications";
 import { isTimelineOverdue, parseTimelineDate } from "@/lib/timeline";
@@ -20,9 +21,7 @@ import { isTimelineOverdue, parseTimelineDate } from "@/lib/timeline";
 export async function POST() {
   const supabase = createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(supabase);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

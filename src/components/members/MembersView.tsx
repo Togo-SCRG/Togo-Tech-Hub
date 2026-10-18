@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { Clock, FolderPlus, Plus, Trash2, X, GripVertical, SearchX, UserPlus, Users } from "lucide-react";
+import { IntentLink } from "@/components/ui/IntentLink";
+import { Clock, Eye, FolderPlus, Plus, Trash2, X, GripVertical, SearchX, UserPlus, Users } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { SearchInput } from "@/components/ui/SearchInput";
@@ -17,6 +17,7 @@ import { FeaturedClients } from "@/components/members/FeaturedClients";
 import { ClientModal } from "@/components/members/ClientModal";
 import { can } from "@/lib/capabilities";
 import { AddMemberModal } from "@/components/members/AddMemberModal";
+import { MemberProjectsModal } from "@/components/members/MemberProjectsModal";
 import { useToast } from "@/components/ui/Toast";
 import { Pagination } from "@/components/ui/Pagination";
 import { ColumnsMenu } from "@/components/ui/ColumnsMenu";
@@ -29,8 +30,9 @@ import { useViewMode } from "@/lib/useViewMode";
 import { useSort } from "@/lib/useSort";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { useColumns } from "@/lib/useColumns";
+import { fetchJson, peekJson } from "@/lib/jsonCache";
 import { TEN_ROWS_PY25 } from "@/lib/tableHeights";
-import type { MemberItem, ClientItem, AccessLevel } from "@/types";
+import type { MemberItem, ClientItem, AccessLevel, MemberProjectSummary } from "@/types";
 
 interface MemberRow {
   id: string;
@@ -41,7 +43,7 @@ interface MemberRow {
   /** Invited but hasn't signed in yet. */
   pending?: boolean;
   /** Counted in Postgres rather than shipped row-by-row — see migration 042. */
-  stats: { total: number; completed: number; projects: string[] };
+  stats: { total: number; completed: number; projects: MemberProjectSummary[] };
 }
 
 type MemberSortKey = "name" | "role" | "access" | "projectCount";
@@ -49,6 +51,10 @@ type MemberSortKey = "name" | "role" | "access" | "projectCount";
 // Sorting by access should run most-privileged first, not alphabetically —
 // "admin" < "super_admin" < "user" as strings is meaningless to a reader.
 const ACCESS_RANK: Record<string, number> = { super_admin: 0, admin: 1, user: 2 };
+
+type MembersResponse = { members?: MemberItem[] };
+type ProjectsResponse = { projects?: string[] };
+type ClientsResponse = { clients?: ClientItem[] };
 
 export function MembersView({ members }: { members: MemberRow[] }) {
   const toast = useToast();
@@ -59,27 +65,36 @@ export function MembersView({ members }: { members: MemberRow[] }) {
   const canAddClient = can(currentUser?.capabilities, "team.client.add");
   const [scope, setScope] = useState<"active" | "pending">("active");
   const canAssignProject = can(currentUser?.capabilities, "project.assign");
-  const [fullMembers, setFullMembers] = useState<MemberItem[]>([]);
-  const [projectNames, setProjectNames] = useState<string[]>([]);
+  // Seeded from the last visit's responses (lib/jsonCache) so the clients panel
+  // doesn't pop in late on every return to this page; the effect below
+  // refreshes all three.
+  const [fullMembers, setFullMembers] = useState<MemberItem[]>(
+    () => peekJson<MembersResponse>("/api/members")?.members ?? []
+  );
+  const [projectNames, setProjectNames] = useState<string[]>(
+    () => peekJson<ProjectsResponse>("/api/projects")?.projects ?? []
+  );
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [visibleMembers, setVisibleMembers] = useState(members);
   const [deleteTarget, setDeleteTarget] = useState<MemberRow | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [clients, setClients] = useState<ClientItem[]>([]);
+  const [clients, setClients] = useState<ClientItem[]>(() => peekJson<ClientsResponse>("/api/clients")?.clients ?? []);
   const [clientModalOpen, setClientModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<ClientItem | null>(null);
   const [addMemberModalOpen, setAddMemberModalOpen] = useState(false);
+  const [projectsFor, setProjectsFor] = useState<MemberRow | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const { visible: columnVisibility, isVisible, toggle: toggleColumn } = useColumns("members");
 
-  // "Name" is the row's identity, so it isn't offered as hideable.
+  // "Name" is the row's identity, so it isn't offered as hideable. Projects is
+  // one column now — a count that opens the full list — rather than a wall of
+  // name chips plus a separate count column that said the same thing twice.
   const MEMBER_COLUMNS = [
     { key: "role", label: "Role" },
     { key: "access", label: "Access" },
     { key: "projects", label: "Projects" },
-    { key: "projectCount", label: "Project Count" },
   ];
 
   useHotkeys({
@@ -141,19 +156,19 @@ export function MembersView({ members }: { members: MemberRow[] }) {
   const reorderable = sort.key === null;
 
   useEffect(() => {
-    fetch("/api/members")
-      .then((res) => res.json())
-      .then((data) => setFullMembers(data.members || []));
-    fetch("/api/projects")
-      .then((res) => res.json())
-      .then((data) => setProjectNames(data.projects || []));
+    fetchJson<MembersResponse>("/api/members").then((data) => {
+      if (data) setFullMembers(data.members || []);
+    });
+    fetchJson<ProjectsResponse>("/api/projects").then((data) => {
+      if (data) setProjectNames(data.projects || []);
+    });
     loadClients();
   }, []);
 
   function loadClients() {
-    fetch("/api/clients")
-      .then((res) => res.json())
-      .then((data) => setClients(data.clients || []));
+    fetchJson<ClientsResponse>("/api/clients").then((data) => {
+      if (data) setClients(data.clients || []);
+    });
   }
 
   function openAddClient() {
@@ -323,7 +338,7 @@ export function MembersView({ members }: { members: MemberRow[] }) {
             const done = m.stats.completed;
             const canDelete = can(currentUser?.capabilities, "member.delete") && currentUser?.id !== m.id;
             return (
-              <Link
+              <IntentLink
                 key={m.id}
                 href={`/members/${m.id}`}
                 className="card-hover relative rounded-md border border-togo-border bg-togo-surface p-4 text-center hover:border-togo-blue"
@@ -375,7 +390,25 @@ export function MembersView({ members }: { members: MemberRow[] }) {
                     <div className="tnum text-base font-bold text-[var(--status-completed-fg)]">{done}</div>
                   </div>
                 </div>
-              </Link>
+                {m.stats.projects.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      // Inside the card's link — open the list, don't follow it.
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setProjectsFor(m);
+                    }}
+                    title={`View ${m.name}'s projects`}
+                    className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded bg-togo-blue-muted px-2 py-1.5 text-xs font-semibold text-togo-blue transition-colors hover:bg-togo-blue/20"
+                  >
+                    <Eye size={13} />
+                    <span className="tnum">
+                      {m.stats.projects.length} {m.stats.projects.length === 1 ? "project" : "projects"}
+                    </span>
+                  </button>
+                )}
+              </IntentLink>
             );
           })}
         </div>
@@ -405,13 +438,8 @@ export function MembersView({ members }: { members: MemberRow[] }) {
                     />
                   ))}
                 {isVisible("projects") && (
-                  <th scope="col" className="section-label whitespace-nowrap px-4 py-2.5">
-                    Projects
-                  </th>
-                )}
-                {isVisible("projectCount") && (
                   <SortableHeader
-                    label="Project Count"
+                    label="Projects"
                     active={sort.key === "projectCount"}
                     direction={sort.direction}
                     onClick={() => handleToggleSort("projectCount")}
@@ -450,7 +478,7 @@ export function MembersView({ members }: { members: MemberRow[] }) {
                       )}
                     </td>
                     <td className="px-4 py-2.5">
-                      <Link href={`/members/${m.id}`} className="flex items-center gap-2 whitespace-nowrap">
+                      <IntentLink href={`/members/${m.id}`} className="flex items-center gap-2 whitespace-nowrap">
                         <Avatar
                           name={m.name}
                           avatarUrl={m.avatar_url}
@@ -466,7 +494,7 @@ export function MembersView({ members }: { members: MemberRow[] }) {
                             <Clock size={9} /> Pending
                           </span>
                         )}
-                      </Link>
+                      </IntentLink>
                     </td>
                     {isVisible("role") && (
                       <td className="px-4 py-2.5 text-togo-blue font-semibold uppercase text-xs tracking-wide whitespace-nowrap">
@@ -480,28 +508,23 @@ export function MembersView({ members }: { members: MemberRow[] }) {
                     )}
                     {isVisible("projects") && (
                       <td className="px-4 py-2.5">
-                      {uniqueProjects.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {uniqueProjects.map((p) => (
-                            <span
-                              key={p}
-                              className="text-xs px-2.5 py-1 rounded-full bg-togo-charcoal border border-togo-border text-togo-muted whitespace-nowrap"
-                            >
-                              {p}
+                        {uniqueProjects.length > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => setProjectsFor(m)}
+                            title={`View ${m.name}'s projects`}
+                            aria-label={`View ${m.name}'s ${uniqueProjects.length} projects`}
+                            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-togo-blue-muted px-3 py-1 text-xs font-semibold text-togo-blue transition-colors hover:bg-togo-blue/20"
+                          >
+                            <span className="tnum">
+                              {uniqueProjects.length} {uniqueProjects.length === 1 ? "project" : "projects"}
                             </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-togo-faint">—</span>
-                      )}
-                    </td>
-                    )}
-                    {isVisible("projectCount") && (
-                      <td className="px-4 py-2.5">
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-togo-blue-muted text-togo-blue">
-                        {uniqueProjects.length} {uniqueProjects.length === 1 ? "project" : "projects"}
-                      </span>
-                    </td>
+                            <Eye size={13} />
+                          </button>
+                        ) : (
+                          <span className="text-togo-faint">—</span>
+                        )}
+                      </td>
                     )}
                   </tr>
                 );
@@ -522,6 +545,18 @@ export function MembersView({ members }: { members: MemberRow[] }) {
           />
         </div>
       )}
+
+      {/* Keyed on the person so the status tab starts at "All" for each one. */}
+      <MemberProjectsModal
+        key={projectsFor?.id ?? "none"}
+        open={!!projectsFor}
+        onClose={() => setProjectsFor(null)}
+        member={
+          projectsFor
+            ? { name: projectsFor.name, avatarUrl: projectsFor.avatar_url, projects: projectsFor.stats.projects }
+            : null
+        }
+      />
 
       {canAssignProject && (
         <MemberProjectModal

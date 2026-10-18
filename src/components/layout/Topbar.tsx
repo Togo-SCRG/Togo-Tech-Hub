@@ -9,12 +9,16 @@ import { ActiveTimerBar } from "@/components/timetracker/ActiveTimerBar";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { NotificationBell } from "@/components/layout/NotificationBell";
 import { EasternClock } from "@/components/layout/EasternClock";
+import { ViewAsBanner, ViewAsMenu } from "@/components/layout/ViewAsMenu";
+import { parseViewAs } from "@/lib/viewAs";
 import type { CurrentUser } from "@/types";
 
 const PAGE_TITLES: { match: (p: string) => boolean; title: string }[] = [
   { match: (p) => p.startsWith("/dashboard"), title: "Dashboard" },
   { match: (p) => p.startsWith("/daily-updates"), title: "Daily Updates" },
   { match: (p) => p.startsWith("/projects"), title: "Projects" },
+  { match: (p) => p.startsWith("/proposals"), title: "Proposals" },
+  { match: (p) => p.startsWith("/resources"), title: "Resources" },
   { match: (p) => p.startsWith("/members"), title: "Team" },
   { match: (p) => p.startsWith("/notifications"), title: "Notifications" },
   { match: (p) => p.startsWith("/access"), title: "Access Levels" },
@@ -24,16 +28,31 @@ const PAGE_TITLES: { match: (p: string) => boolean; title: string }[] = [
 export function Topbar({ user }: { user: CurrentUser | null }) {
   const pathname = usePathname();
   const title = PAGE_TITLES.find((p) => p.match(pathname))?.title ?? "";
+  const viewingAs = parseViewAs(user?.viewingAs);
+  // A super admin, whether or not they're currently previewing another tier.
+  const canPreview = !!user && (user.isSuperAdmin || !!viewingAs);
 
   return (
-    <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-togo-border bg-togo-charcoal/80 px-4 py-3 backdrop-blur sm:px-6 md:px-8">
-      {user && <MobileNav isAdmin={user.isAdmin} isSuperAdmin={user.isSuperAdmin} isClient={user.isClient} />}
+    // The banner sits inside the sticky header so it stays on screen while you
+    // scroll — a preview mustn't be mistakable for the real thing.
+    <header className="sticky top-0 z-20 border-b border-togo-border bg-togo-charcoal/80 backdrop-blur">
+      {viewingAs && <ViewAsBanner viewingAs={viewingAs} />}
+      <div className="flex items-center gap-3 px-4 py-3 sm:px-6 md:px-8">
+      {user && (
+        <MobileNav
+          isAdmin={user.isAdmin}
+          isSuperAdmin={user.isSuperAdmin}
+          isClient={user.isClient}
+          canSeeProposals={!!user.proposalRole}
+        />
+      )}
       <div className="flex min-w-0 items-center gap-3">
         <h1 className="whitespace-nowrap text-base font-bold text-togo-white">{title}</h1>
       </div>
       <div className="flex-1" />
       {user && (
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          {canPreview && <ViewAsMenu viewingAs={viewingAs} />}
           <ActiveTimerBar />
           <NotificationBell />
           {/* The theme toggle used to live in the sidebar footer, which now
@@ -61,6 +80,7 @@ export function Topbar({ user }: { user: CurrentUser | null }) {
           </Link>
         </div>
       )}
+      </div>
     </header>
   );
 }

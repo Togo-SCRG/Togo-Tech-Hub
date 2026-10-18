@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { IntentLink } from "@/components/ui/IntentLink";
 import {
   Eye,
   EyeOff,
@@ -25,6 +25,7 @@ import { AvatarUploadField } from "@/components/members/AvatarUploadField";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { clearViewAs } from "@/lib/viewAs";
 import { invalidateCurrentUser } from "@/lib/useCurrentUser";
 import type { CurrentUser, MemberItem } from "@/types";
 
@@ -188,6 +189,8 @@ export default function SettingsPage() {
   async function handleLogout() {
     setLoggingOut(true);
     const supabase = createClient();
+    // While the session still exists — the route that clears it needs one.
+    await clearViewAs();
     await supabase.auth.signOut();
     router.push("/login");
     router.refresh();
@@ -242,12 +245,12 @@ export default function SettingsPage() {
       {/* No page heading here — the topbar already names the page, and two
           copies of the same word stacked on top of each other is just noise. */}
       <div className="flex flex-wrap items-end justify-end gap-3">
-        <Link
+        <IntentLink
           href={`/members/${user.id}`}
           className="flex items-center gap-1.5 text-xs font-medium text-togo-muted transition-colors hover:text-togo-blue"
         >
           View public profile <ExternalLink size={12} />
-        </Link>
+        </IntentLink>
       </div>
 
       {/* No items-start: both columns stretch to the same height, so the two
@@ -520,11 +523,11 @@ export default function SettingsPage() {
 
           {user.isSuperAdmin && (
             <Card icon={ShieldCheck} title="Administration" description="Manage who can see and change what.">
-              <Link href="/access">
+              <IntentLink href="/access">
                 <Button type="button" size="sm" variant="secondary">
                   Manage access levels
                 </Button>
-              </Link>
+              </IntentLink>
             </Card>
           )}
 

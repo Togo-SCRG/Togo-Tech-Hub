@@ -18,6 +18,8 @@ export interface ProjectBlockerRow {
   avatarUrl: string | null;
   blockers: string;
   date: string;
+  /** Full timestamp, where there is one — for ordering by recency. */
+  createdAt?: string;
   source: BlockerSource;
 }
 
@@ -64,6 +66,7 @@ export async function fetchProjectBlockers(
         // Date-only, to match the `date` column daily-update blockers carry —
         // the two are rendered by the same component.
         date: (row.created_at as string).slice(0, 10),
+        createdAt: row.created_at as string,
         source: "project" as const,
       };
     })

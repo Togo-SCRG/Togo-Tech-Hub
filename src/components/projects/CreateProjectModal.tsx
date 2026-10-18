@@ -2,16 +2,17 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, FileText, X } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { DatePicker, formatPickedDate } from "@/components/ui/DatePicker";
 import { PopoverPortal } from "@/components/ui/PopoverPortal";
 import { Input, Textarea, Label } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
-import { PrdField } from "@/components/projects/PrdField";
+import { DocumentDropzone } from "@/components/documents/DocumentDropzone";
 import { useToast } from "@/components/ui/Toast";
-import { cn } from "@/lib/utils";
+import { MAX_DOCUMENT_BYTES } from "@/lib/projectDocs";
+import { cn, formatBytes } from "@/lib/utils";
 import type { MemberItem } from "@/types";
 
 interface Props {
@@ -28,8 +29,7 @@ export function CreateProjectModal({ open, onClose, members }: Props) {
   const [timeline, setTimeline] = useState("");
   const [timelinePickerOpen, setTimelinePickerOpen] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
-  const [prd, setPrd] = useState("");
-  const [prdFile, setPrdFile] = useState<File | null>(null);
+  const [documents, setDocuments] = useState<File[]>([]);
   const [memberIds, setMemberIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,8 +43,7 @@ export function CreateProjectModal({ open, onClose, members }: Props) {
     setOverview("");
     setTimeline("");
     setTimelinePickerOpen(false);
-    setPrd("");
-    setPrdFile(null);
+    setDocuments([]);
     setMemberIds([]);
     setError(null);
   }
@@ -52,6 +51,16 @@ export function CreateProjectModal({ open, onClose, members }: Props) {
   function handleClose() {
     reset();
     onClose();
+  }
+
+  // Held until the project exists — a document needs a project to belong to.
+  // Oversized files are turned away here rather than failing after creation.
+  function addDocuments(files: File[]) {
+    const tooBig = files.filter((f) => f.size > MAX_DOCUMENT_BYTES);
+    if (tooBig.length > 0) {
+      toast.error(`${tooBig.map((f) => `“${f.name}”`).join(", ")} ${tooBig.length === 1 ? "is" : "are"} over 20 MB.`);
+    }
+    setDocuments((prev) => [...prev, ...files.filter((f) => f.size <= MAX_DOCUMENT_BYTES)]);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -68,7 +77,7 @@ export function CreateProjectModal({ open, onClose, members }: Props) {
       const res = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project: title.trim(), overview, prd, timeline: timeline.trim(), memberIds }),
+        body: JSON.stringify({ project: title.trim(), overview, timeline: timeline.trim(), memberIds }),
       });
 
       if (!res.ok) {
@@ -80,11 +89,18 @@ export function CreateProjectModal({ open, onClose, members }: Props) {
 
       const data = await res.json();
 
-      if (prdFile) {
-        const formData = new FormData();
-        formData.append("project", data.project);
-        formData.append("file", prdFile);
-        await fetch("/api/project-files", { method: "POST", body: formData });
+      // The project exists now, so a failed upload is reported rather than
+      // undoing it — the files can be added again from the Documents tab.
+      if (documents.length > 0) {
+        // Loaded only when there's something to upload — see ProjectDocuments.
+        const { uploadProjectDocument } = await import("@/lib/uploadDocument");
+        const results = await Promise.allSettled(documents.map((file) => uploadProjectDocument(data.project, file)));
+        const failed = results.filter((r) => r.status === "rejected").length;
+        if (failed > 0) {
+          toast.error(
+            `${failed} of ${documents.length} documents couldn't be uploaded — add them from the project's Documents tab.`
+          );
+        }
       }
 
       toast.success(`"${data.project}" was created.`);
@@ -168,14 +184,31 @@ export function CreateProjectModal({ open, onClose, members }: Props) {
             </div>
 
             <div>
-              <Label>PRD</Label>
-              <PrdField
-                prdText={prd}
-                onPrdTextChange={setPrd}
-                attachedFileName={prdFile?.name || null}
-                onFileSelect={setPrdFile}
-                onFileRemove={() => setPrdFile(null)}
-              />
+              <Label hint="Optional">Documents</Label>
+              {documents.length > 0 && (
+                <ul className="mb-2 divide-y divide-togo-border overflow-hidden rounded-md border border-togo-border">
+                  {documents.map((file, i) => (
+                    <li key={`${file.name}-${i}`} className="flex items-center gap-2.5 px-3 py-2">
+                      <FileText size={15} className="shrink-0 text-togo-blue" />
+                      <span className="min-w-0 flex-1 truncate text-sm text-togo-white" title={file.name}>
+                        {file.name}
+                      </span>
+                      <span className="tnum shrink-0 text-xs text-togo-faint">{formatBytes(file.size)}</span>
+                      <button
+                        type="button"
+                        onClick={() => setDocuments((prev) => prev.filter((_, j) => j !== i))}
+                        disabled={saving}
+                        title="Remove"
+                        aria-label={`Remove ${file.name}`}
+                        className="shrink-0 rounded p-0.5 text-togo-faint transition-colors hover:text-[var(--status-blocked-fg)]"
+                      >
+                        <X size={14} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <DocumentDropzone onFiles={addDocuments} compact={documents.length > 0} disabled={saving} />
             </div>
           </div>
 
@@ -216,7 +249,7 @@ export function CreateProjectModal({ open, onClose, members }: Props) {
             Cancel
           </Button>
           <Button type="submit" disabled={saving}>
-            {saving ? "Creating..." : "Create Project"}
+            {saving ? (documents.length > 0 ? "Creating & uploading..." : "Creating...") : "Create Project"}
           </Button>
         </div>
       </form>

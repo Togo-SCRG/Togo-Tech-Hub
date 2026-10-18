@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { capabilitiesFor } from "@/lib/permissions";
-import type { AccessLevel } from "@/types";
+import { getAuthUser, getCurrentUser } from "@/lib/auth";
 import { ensureMemberProject } from "@/lib/memberProjects";
 import { notify } from "@/lib/notifications";
 import { syncProjectStatus } from "@/lib/syncProjectStatus";
@@ -31,9 +30,7 @@ function toCamel(row: any) {
 export async function GET(req: NextRequest) {
   const supabase = createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(supabase);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -46,14 +43,11 @@ export async function GET(req: NextRequest) {
   // A tier without "see everyone's tasks" only ever receives their own —
   // enforced here, not just hidden in the UI, so the rows never leave the
   // server. Driven by the permission matrix, so the super admin can change who
-  // gets team-wide visibility without a code change.
-  const { data: callerProfile } = await supabase
-    .from("profiles")
-    .select("access_level")
-    .eq("id", user.id)
-    .single();
-  const caps = await capabilitiesFor(supabase, callerProfile?.access_level as AccessLevel, user.id);
-  const seesEveryone = caps.includes("tracker.view.all");
+  // gets team-wide visibility without a code change. getCurrentUser() rather
+  // than reading the tier directly, so a super admin previewing a tier ("View
+  // as") gets that tier's scoping too.
+  const viewer = await getCurrentUser();
+  const seesEveryone = !!viewer?.capabilities.includes("tracker.view.all");
 
   let query = supabase
     .from("daily_updates")
@@ -89,9 +83,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const supabase = createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(supabase);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

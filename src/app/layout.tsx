@@ -18,29 +18,29 @@ export const metadata: Metadata = {
 // parsing — before globals.css has loaded. Without it a cold load paints the
 // default white canvas until the stylesheet arrives, which is why the site
 // flashed light on a first visit and looked correct on reload (CSS cached).
-// Dark first, so that's the canvas we get; the `light` fallback covers the
-// scrollbars and form controls of anyone who has chosen light.
+// Light first, so that's the canvas we get; the `dark` fallback covers the
+// scrollbars and form controls of anyone who has chosen dark.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  colorScheme: "dark light",
+  colorScheme: "light dark",
 };
 
-// Dark is the default, and it's set on <html> in the markup below rather than
-// added by this script — so a first paint (or a session with JavaScript blocked,
-// or a script that fails) is dark rather than light.
+// Light is the default: <html> carries no `dark` class in the markup below, so a
+// first paint (or a session with JavaScript blocked, or a script that fails) is
+// light.
 //
-// All this script does is *remove* the class for someone who has chosen light.
-// It runs before hydration, so that choice is applied on the first paint instead
-// of flashing dark and snapping to light a moment later.
+// All this script does is *add* the class for someone who has chosen dark. It
+// runs before hydration, so that choice is applied on the first paint instead
+// of flashing light and snapping to dark a moment later.
 const themeInitScript = `
 (function () {
   try {
-    if (localStorage.getItem("togo-theme") === "light") {
-      document.documentElement.classList.remove("dark");
+    if (localStorage.getItem("togo-theme") === "dark") {
+      document.documentElement.classList.add("dark");
     }
   } catch (e) {
-    // localStorage can throw in private mode. Dark is already applied, which is
+    // localStorage can throw in private mode. Light is already applied, which is
     // the default anyway, so there's nothing to recover from.
   }
 })();
@@ -48,10 +48,10 @@ const themeInitScript = `
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    // suppressHydrationWarning because the script above may have removed this
-    // class before React hydrates, which would otherwise be reported as a
+    // suppressHydrationWarning because the script above may have added the
+    // `dark` class before React hydrates, which would otherwise be reported as a
     // server/client mismatch.
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>

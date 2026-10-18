@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth";
 
 // "Clients" are simply profiles at the admin access level — real login
 // accounts, reusing the same auth.users + profiles pattern as every other
@@ -17,9 +18,7 @@ function toCamel(row: any) {
 export async function GET() {
   const supabase = createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(supabase);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

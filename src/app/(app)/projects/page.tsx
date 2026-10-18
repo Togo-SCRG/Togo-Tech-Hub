@@ -4,6 +4,7 @@ import { fetchTaskRows } from "@/lib/fetchTaskRows";
 import { fetchProjectBlockers } from "@/lib/projectBlockers";
 import { isRealBlocker } from "@/lib/blockers";
 import { hasWorkType, onlyProjectWork } from "@/lib/schemaSupport";
+import { fetchProjectLinks } from "@/lib/projectDocs";
 
 interface Participant {
   userId: string;
@@ -24,6 +25,7 @@ export default async function ProjectsPage() {
     { data: profiles },
     { data: projectSettings },
     standaloneBlockers,
+    projectLinks,
   ] = await Promise.all([
       supabase.from("member_projects").select("*, profiles(id, name, avatar_url, role)"),
       // Project work only. A task ("Meetings", "Support") is logged in these
@@ -35,11 +37,11 @@ export default async function ProjectsPage() {
       onlyProjectWork(
         supabase
           .from("daily_updates")
-          .select("project, date, status, blockers, user_id, profiles(id, name, avatar_url, role)"),
+          .select("project, date, created_at, status, blockers, user_id, profiles(id, name, avatar_url, role)"),
         workTypeReady
       ).order("date", { ascending: false }),
       onlyProjectWork(
-        supabase.from("time_entries").select("project, duration_minutes"),
+        supabase.from("time_entries").select("project, date, created_at, duration_minutes"),
         workTypeReady
       ),
       supabase
@@ -47,10 +49,15 @@ export default async function ProjectsPage() {
         .select("id, name, invited_at, signed_in_at")
         .neq("access_level", "client")
         .order("name"),
-      supabase.from("project_settings").select("project, status, timeline, weekly_hour_cap"),
+      // `*` so its timestamps come along where the table has them — a project
+      // created with nobody on it yet still sorts as brand new — without a
+      // select that fails on a database where it doesn't.
+      supabase.from("project_settings").select("*"),
       // Blockers raised against a project directly (migration 038), so the
       // per-project count matches what the project page shows.
       fetchProjectBlockers(supabase),
+      // Each project's client-portal and system links, from its notes (050).
+      fetchProjectLinks(supabase),
     ]);
 
   const settingsByProject = new Map((projectSettings || []).map((p) => [p.project, p]));
@@ -72,22 +79,42 @@ export default async function ProjectsPage() {
     return projects.get(name)!;
   }
 
+  // Last activity drives the list's default "Most recent" order — to the
+  // moment, not the day: compared by day, every project touched today tied and
+  // fell back to A–Z, so a project created a minute ago could land mid-list.
+  // Everything is normalised to an ISO timestamp so the sources compare
+  // fairly; a source with only a date counts from that day's start.
+  function touch(entry: { lastActivity: string | null }, at: string | null | undefined) {
+    if (!at) return;
+    const time = new Date(at);
+    if (Number.isNaN(time.getTime())) return;
+    const iso = time.toISOString();
+    if (!entry.lastActivity || iso > entry.lastActivity) entry.lastActivity = iso;
+  }
+
   // A project can exist with no assignees/updates/time yet (freshly created
-  // via "Create Project") — make sure it still shows up in the hub.
-  for (const ps of projectSettings || []) {
-    getProject(ps.project);
+  // via "Create Project") — make sure it still shows up in the hub, and as
+  // new as it is.
+  for (const ps of (projectSettings || []) as Record<string, string | null>[]) {
+    const entry = getProject(ps.project as string);
+    touch(entry, ps.created_at ?? ps.updated_at);
   }
 
   // Standalone blockers count towards the same badge as the ones carried on a
   // daily update below — the card shows "how much is held up", not where it was
   // written down.
   for (const b of standaloneBlockers) {
-    getProject(b.project).blockerCount += 1;
+    const entry = getProject(b.project);
+    entry.blockerCount += 1;
+    touch(entry, b.createdAt ?? b.date);
   }
 
   // member_projects is the source of truth for status/role when present.
   for (const mp of memberProjects || []) {
     const entry = getProject(mp.project);
+    // Being assigned, or a status change, counts as activity — it's also what
+    // puts a just-created project at the top before anyone has logged on it.
+    touch(entry, mp.updated_at ?? mp.created_at);
     if (mp.profiles) {
       entry.participants.set(mp.user_id, {
         userId: mp.user_id,
@@ -102,9 +129,9 @@ export default async function ProjectsPage() {
   // explicitly added to "My Projects" yet, and drive last-activity date.
   for (const u of dailyUpdates || []) {
     const entry = getProject(u.project);
-    if (!entry.lastActivity || u.date > entry.lastActivity) {
-      entry.lastActivity = u.date;
-    }
+    // When it was logged, which is what "recent" means here; the work date can
+    // be days earlier.
+    touch(entry, u.created_at ?? u.date);
     // Unresolved blockers — the same definition the project detail page and the
     // dashboard use, and the same thing the Resolve button clears. Placeholders
     // ("N/A", "None", "Done") don't count.
@@ -125,8 +152,11 @@ export default async function ProjectsPage() {
   for (const t of timeEntries || []) {
     const entry = getProject(t.project);
     entry.totalMinutes += t.duration_minutes;
+    touch(entry, t.created_at ?? t.date);
   }
 
+  // A–Z is the base order: it's what "Name (A–Z)" shows, the tiebreak within
+  // "Most recent", and where new rows land in a custom drag order.
   const sortedProjects = Array.from(projects.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([name, data]) => {
@@ -137,6 +167,7 @@ export default async function ProjectsPage() {
         participants,
         totalMinutes: data.totalMinutes,
         blockerCount: data.blockerCount,
+        lastActivity: data.lastActivity,
         timeline: settings?.timeline ?? null,
         weeklyHourCap: settings?.weekly_hour_cap ?? null,
         status: settings?.status || participants[0]?.status || "Not Started",
@@ -164,5 +195,5 @@ export default async function ProjectsPage() {
   // out. Empty before migration 040, where nothing can be a task yet.
   const tasks = workTypeReady ? await fetchTaskRows(supabase) : [];
 
-  return <ProjectsTabs projects={sortedProjects} members={members} tasks={tasks} />;
+  return <ProjectsTabs projects={sortedProjects} links={projectLinks} members={members} tasks={tasks} />;
 }

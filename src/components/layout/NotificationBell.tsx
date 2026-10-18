@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { IntentLink } from "@/components/ui/IntentLink";
 import { ArrowRight, Bell } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { cn, timeAgo } from "@/lib/utils";
@@ -90,13 +90,13 @@ export function NotificationBell() {
         <div className="animate-fade-in absolute right-0 z-40 mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-md border border-togo-border bg-togo-surface shadow-[var(--shadow-modal)]">
           <div className="flex items-center justify-between border-b border-togo-border px-4 py-2.5">
             <span className="text-xs font-semibold text-togo-white">Notifications</span>
-            <Link
+            <IntentLink
               href="/notifications"
               onClick={() => setOpen(false)}
               className="flex items-center gap-1 text-[11px] text-togo-faint transition-colors hover:text-togo-blue"
             >
               View all <ArrowRight size={11} />
-            </Link>
+            </IntentLink>
           </div>
 
           {preview.length === 0 ? (
@@ -107,7 +107,7 @@ export function NotificationBell() {
                 const { verb, icon: TypeIcon, badgeClass, systemGenerated } = notificationVisual(n.type);
                 return (
                   <li key={n.id}>
-                    <Link
+                    <IntentLink
                       href={`/projects/${encodeURIComponent(n.project)}`}
                       onClick={() => {
                         markOneRead(n);
@@ -156,7 +156,7 @@ export function NotificationBell() {
                       {!n.readAt && (
                         <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--status-blocked-fg)]" />
                       )}
-                    </Link>
+                    </IntentLink>
                   </li>
                 );
               })}
@@ -164,13 +164,13 @@ export function NotificationBell() {
           )}
 
           {items.length > PREVIEW_COUNT && (
-            <Link
+            <IntentLink
               href="/notifications"
               onClick={() => setOpen(false)}
               className="block border-t border-togo-border px-4 py-2.5 text-center text-[11px] text-togo-faint transition-colors hover:text-togo-blue"
             >
               {items.length - PREVIEW_COUNT} more
-            </Link>
+            </IntentLink>
           )}
         </div>
       )}

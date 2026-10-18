@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { MembersView } from "@/components/members/MembersView";
 import { compareByRole } from "@/lib/utils";
-import type { AccessLevel } from "@/types";
+import type { AccessLevel, MemberProjectSummary } from "@/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 interface ProfileRow {
@@ -18,7 +18,7 @@ interface ProfileRow {
 export interface MemberStats {
   total: number;
   completed: number;
-  projects: string[];
+  projects: MemberProjectSummary[];
 }
 
 const EMPTY_STATS: MemberStats = { total: 0, completed: 0, projects: [] };
@@ -72,20 +72,28 @@ async function fetchUpdateCounts(
  *
  * This replaced a distinct over every row of daily_updates, which counted the
  * tasks *and* any project someone had logged against without being on it.
+ *
+ * Each project carries its status for the roster's projects preview, which
+ * groups them by it. The project's own status wins over this person's, the
+ * same rule /api/member-projects and the Projects list apply.
  */
-async function fetchMemberProjects(supabase: SupabaseClient): Promise<Map<string, string[]>> {
-  const byUser = new Map<string, string[]>();
+async function fetchMemberProjects(supabase: SupabaseClient): Promise<Map<string, MemberProjectSummary[]>> {
+  const byUser = new Map<string, MemberProjectSummary[]>();
 
-  const { data } = await supabase
-    .from("member_projects")
-    .select("user_id, project")
-    .order("created_at", { ascending: true });
+  // project_settings is small (one row per project), so it rides along.
+  const [{ data }, { data: settings }] = await Promise.all([
+    supabase.from("member_projects").select("user_id, project, status").order("created_at", { ascending: true }),
+    supabase.from("project_settings").select("project, status"),
+  ]);
+  const projectStatus = new Map((settings || []).map((s) => [s.project as string, s.status as string | null]));
 
   for (const row of data || []) {
     const list = byUser.get(row.user_id) || [];
     // One row per person per project is the norm, but nothing in the schema
     // enforces it, so don't let a duplicate inflate the count.
-    if (row.project && !list.includes(row.project)) list.push(row.project);
+    if (row.project && !list.some((p) => p.name === row.project)) {
+      list.push({ name: row.project, status: projectStatus.get(row.project) || row.status || "Not Started" });
+    }
     byUser.set(row.user_id, list);
   }
   return byUser;

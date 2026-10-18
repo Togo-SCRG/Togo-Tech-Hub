@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { IntentLink } from "@/components/ui/IntentLink";
 import { UserPlus, X } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -118,7 +118,7 @@ export function ProjectTeamSection({
             const minutes = minutesByUser[p.userId] || 0;
             return (
               <li key={p.userId} className="group flex items-center gap-2.5 px-4 py-2.5">
-                <Link
+                <IntentLink
                   href={`/members/${p.userId}`}
                   className="flex min-w-0 flex-1 items-center gap-2.5 transition-colors hover:text-togo-blue"
                 >
@@ -131,7 +131,7 @@ export function ProjectTeamSection({
                       {p.role || (p.memberProjectId ? "No role set" : "From logged updates")}
                     </div>
                   </div>
-                </Link>
+                </IntentLink>
 
                 <div className="flex shrink-0 flex-col items-end gap-1">
                   <div className="flex items-center gap-1.5">
