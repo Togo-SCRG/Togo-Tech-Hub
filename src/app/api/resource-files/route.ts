@@ -7,7 +7,7 @@ import { MIGRATION_049_MISSING, RESOURCE_FILES_BUCKET, isResourcesMissing } from
 /**
  * Records a file the browser has just uploaded to the resource-files bucket —
  * the same two-step shape as project and proposal documents (the bytes go
- * straight to Storage; this adds the row). Anyone on the team may (049).
+ * straight to Storage; this adds the row). Anyone signed in may, clients too (051).
  */
 export async function POST(req: NextRequest) {
   const supabase = createClient();

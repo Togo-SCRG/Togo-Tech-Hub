@@ -9,22 +9,19 @@ import { LINK_CATEGORIES } from "@/lib/resources";
 import type { ResourceLink, ResourceLinkCategory } from "@/types";
 
 /**
- * Add a link to the library, or edit one. "Official website" is offered to
- * admins only — the database refuses it from anyone else regardless — and
- * setting it moves the title from whichever link held it.
+ * Add a link to the library, or edit one. Anyone may set the "Official
+ * website" (051), and setting it moves the title from whichever link held it.
  */
 export function LinkFormModal({
   open,
   onClose,
   editing,
-  canSetOfficial,
   presetOfficial,
   onSaved,
 }: {
   open: boolean;
   onClose: () => void;
   editing?: ResourceLink | null;
-  canSetOfficial: boolean;
   /** Opened from "Add the official website": start with it ticked, as a Company link. */
   presetOfficial?: boolean;
   onSaved: (link: ResourceLink) => void;
@@ -52,7 +49,7 @@ export function LinkFormModal({
         category,
         description,
         pinned,
-        ...(canSetOfficial ? { isOfficial } : {}),
+        isOfficial,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -131,23 +128,21 @@ export function LinkFormModal({
               <span className="block text-xs text-togo-faint">Shows in Quick links on everyone&apos;s dashboard.</span>
             </span>
           </label>
-          {canSetOfficial && (
-            <label className="flex cursor-pointer items-start gap-2.5">
-              <input
-                type="checkbox"
-                checked={isOfficial}
-                onChange={(e) => setIsOfficial(e.target.checked)}
-                className="mt-0.5 h-4 w-4 shrink-0 accent-[#0797DF]"
-              />
-              <span>
-                <span className="block text-sm font-medium text-togo-white">This is Togo&apos;s official website</span>
-                <span className="block text-xs text-togo-faint">
-                  Featured at the top of the dashboard for everyone, clients included. Only one link can be the official
-                  website.
-                </span>
+          <label className="flex cursor-pointer items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={isOfficial}
+              onChange={(e) => setIsOfficial(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-[#0797DF]"
+            />
+            <span>
+              <span className="block text-sm font-medium text-togo-white">This is Togo&apos;s official website</span>
+              <span className="block text-xs text-togo-faint">
+                Featured at the top of the dashboard for everyone, clients included. Only one link can be the official
+                website.
               </span>
-            </label>
-          )}
+            </span>
+          </label>
         </div>
 
         {error && (

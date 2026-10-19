@@ -47,10 +47,13 @@ import type { HubFile, ResourceLink, SourcedLink } from "@/types";
 
 export type ResourcesTab = "files" | "links";
 
-/** What the viewer may do — mirrors the database's rules, which still decide. */
+/**
+ * What the viewer may do — mirrors the database's rules, which still decide.
+ * The library's own links and files are everyone's to manage, clients
+ * included (051); project and proposal items follow their own permissions.
+ */
 export interface ResourcesViewer {
   id: string;
-  isAdmin: boolean;
   /** Holds project.docs.edit; the database also wants them on the project (or manage-all). */
   canEditProjectDocs: boolean;
   canManageProposals: boolean;
@@ -190,27 +193,23 @@ export function ResourcesView({
                 <ExternalLink size={14} /> Visit
               </Button>
             </a>
-            {me.isAdmin && (
-              <button type="button" onClick={() => setForm({ editing: official })} title="Edit" aria-label="Edit the official website" className={iconButton}>
-                <Pencil size={15} />
-              </button>
-            )}
+            <button type="button" onClick={() => setForm({ editing: official })} title="Edit" aria-label="Edit the official website" className={iconButton}>
+              <Pencil size={15} />
+            </button>
           </div>
         </div>
       ) : (
-        me.isAdmin && (
-          <button
-            type="button"
-            onClick={() => setForm({ official: true })}
-            className="flex w-full items-center gap-3 rounded-md border border-dashed border-togo-border p-4 text-left transition-colors hover:border-togo-blue"
-          >
-            <Globe size={20} className="shrink-0 text-togo-faint" />
-            <span>
-              <span className="block text-sm font-semibold text-togo-white">Add Togo&apos;s official website</span>
-              <span className="block text-xs text-togo-faint">It&apos;s featured here and at the top of everyone&apos;s dashboard.</span>
-            </span>
-          </button>
-        )
+        <button
+          type="button"
+          onClick={() => setForm({ official: true })}
+          className="flex w-full items-center gap-3 rounded-md border border-dashed border-togo-border p-4 text-left transition-colors hover:border-togo-blue"
+        >
+          <Globe size={20} className="shrink-0 text-togo-faint" />
+          <span>
+            <span className="block text-sm font-semibold text-togo-white">Add Togo&apos;s official website</span>
+            <span className="block text-xs text-togo-faint">It&apos;s featured here and at the top of everyone&apos;s dashboard.</span>
+          </span>
+        </button>
       )}
 
       {tab === "files" ? (
@@ -233,7 +232,6 @@ export function ResourcesView({
           onClose={() => setForm(null)}
           editing={form.editing}
           presetOfficial={form.official}
-          canSetOfficial={me.isAdmin}
           onSaved={saved}
         />
       )}
@@ -271,7 +269,8 @@ function LinksTab({
   const [confirm, setConfirm] = useState<LinkItem[] | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const canDeleteLibrary = (l: ResourceLink) => me.isAdmin || l.createdBy?.id === me.id;
+  // Any library link is anyone's to edit or delete; a gathered one only by
+  // whoever may edit the note it's written in.
   const canRemoveSourced = (s: SourcedLink) => (s.source === "project" ? me.canEditProjectDocs : me.canManageProposals);
 
   const q = search.trim().toLowerCase();
@@ -307,7 +306,7 @@ function LinksTab({
 
   // Everything on screen that this viewer could delete — what "Select all" means.
   const selectable: LinkItem[] = [
-    ...shownLinks.filter(canDeleteLibrary).map((link) => ({ kind: "library" as const, link })),
+    ...shownLinks.map((link) => ({ kind: "library" as const, link })),
     ...[...shownProjectLinks, ...shownProposalLinks].filter(canRemoveSourced).map((link) => ({ kind: "sourced" as const, link })),
   ];
   const keyOf = (item: LinkItem) => (item.kind === "library" ? libraryKey(item.link) : sourcedKey(item.link));
@@ -414,7 +413,6 @@ function LinksTab({
               <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {libraryPages.paged.map((l) => {
                   const Icon = LINK_CATEGORY_ICON[l.category];
-                  const mine = canDeleteLibrary(l);
                   const key = libraryKey(l);
                   return (
                     <li
@@ -425,13 +423,11 @@ function LinksTab({
                       )}
                     >
                       <div className="flex items-start gap-3">
-                        {mine && (
-                          <Checkbox checked={selected.has(key)} onChange={() => toggle(key)} label={`Select ${l.label}`} className="mt-2.5" />
-                        )}
+                        <Checkbox checked={selected.has(key)} onChange={() => toggle(key)} label={`Select ${l.label}`} className="mt-2.5" />
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-togo-blue-muted text-togo-blue">
                           <Icon size={17} />
                         </div>
-                        <div className={cn("min-w-0 flex-1", mine && "pr-16")}>
+                        <div className="min-w-0 flex-1 pr-16">
                           <a
                             href={l.url}
                             target="_blank"
@@ -464,22 +460,20 @@ function LinksTab({
                         )}
                         {l.createdBy && <span className="ml-auto truncate">by {l.createdBy.name}</span>}
                       </div>
-                      {mine && (
-                        <div className="absolute right-2 top-2 flex items-center gap-0.5">
-                          <button type="button" onClick={() => onEdit(l)} title="Edit" aria-label={`Edit ${l.label}`} className={iconButton}>
-                            <Pencil size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setConfirm([{ kind: "library", link: l }])}
-                            title="Delete"
-                            aria-label={`Delete ${l.label}`}
-                            className={deleteButton}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      )}
+                      <div className="absolute right-2 top-2 flex items-center gap-0.5">
+                        <button type="button" onClick={() => onEdit(l)} title="Edit" aria-label={`Edit ${l.label}`} className={iconButton}>
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirm([{ kind: "library", link: l }])}
+                          title="Delete"
+                          aria-label={`Delete ${l.label}`}
+                          className={deleteButton}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </li>
                   );
                 })}
@@ -672,11 +666,11 @@ function FilesTab({
   const [busy, setBusy] = useState(false);
   const pickerRef = useRef<HTMLInputElement>(null);
 
-  // Each file is removable where it lives: a library file by whoever uploaded
-  // it (or an admin), a project's or a proposal's by those who manage it.
+  // Each file is removable where it lives: a library file by anyone, a
+  // project's or a proposal's by those who manage it.
   const canDelete = (f: HubFile) =>
     f.source === "library"
-      ? me.isAdmin || f.uploadedById === me.id
+      ? true
       : f.source === "project"
         ? me.canEditProjectDocs
         : me.canManageProposals;

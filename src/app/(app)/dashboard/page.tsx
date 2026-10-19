@@ -354,12 +354,7 @@ export default async function DashboardPage() {
             links sit above: short, and the first thing people reach for. */}
         <div className="space-y-3">
           {resourceLinks.ready && (
-            <QuickLinksPanel
-              official={officialLink}
-              pinned={pinnedLinks}
-              isTeam={!viewer?.isClient}
-              isAdmin={!!(viewer?.isAdmin || viewer?.isSuperAdmin)}
-            />
+            <QuickLinksPanel official={officialLink} pinned={pinnedLinks} />
           )}
           <ActiveProjectsPanel projects={activeProjects.map((p) => ({ name: p.name, status: p.status }))} />
         </div>
