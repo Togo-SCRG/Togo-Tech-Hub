@@ -1,26 +1,15 @@
-import { Lock } from "lucide-react";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { can } from "@/lib/capabilities";
 import { fetchHubFiles, fetchResourceLinks, fetchSourcedLinks } from "@/lib/resources";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { ResourcesView, type ResourcesTab } from "@/components/resources/ResourcesView";
 
 export default async function ResourcesPage({ searchParams }: { searchParams: { tab?: string } }) {
-  // Cached from the layout's lookup, so it costs nothing.
+  // Cached from the layout's lookup, so it costs nothing. Everyone signed in
+  // may use Resources, clients included (051).
   const me = await getCurrentUser();
-
-  // The team's library — internal systems and files, not for clients. The
-  // database refuses them too (049); this just says why.
-  if (!me || me.isClient) {
-    return (
-      <EmptyState
-        icon={Lock}
-        title="Resources are for the team"
-        description="The team's shared files and links aren't available on client accounts."
-      />
-    );
-  }
+  if (!me) redirect("/login");
 
   const supabase = createClient();
   const canSeeProposals = !!me.proposalRole;
@@ -42,7 +31,6 @@ export default async function ResourcesPage({ searchParams }: { searchParams: { 
       ready={ready}
       me={{
         id: me.id,
-        isAdmin: me.isAdmin || me.isSuperAdmin,
         canEditProjectDocs: can(me.capabilities, "project.docs.edit"),
         canManageProposals: me.proposalRole === "manager",
       }}

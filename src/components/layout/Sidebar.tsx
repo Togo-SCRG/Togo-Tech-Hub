@@ -36,7 +36,7 @@ export interface NavItem {
 // topbar, which carries the unread badge. The /notifications page still exists
 // for the bell's "View all" link.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function getNavItems(isAdmin: boolean, _isSuperAdmin = false, isClient = false, canSeeProposals = false): NavItem[] {
+export function getNavItems(isAdmin: boolean, _isSuperAdmin = false, _isClient = false, canSeeProposals = false): NavItem[] {
   return [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, section: "menu" as const },
     // One label for everyone. What differs by tier is whose updates you see,
@@ -52,9 +52,8 @@ export function getNavItems(isAdmin: boolean, _isSuperAdmin = false, isClient = 
       ? [{ href: "/proposals", label: "Proposals", icon: Handshake, section: "menu" as const }]
       : []),
     { href: "/members", label: "Team", icon: Users, section: "menu" as const },
-    // The team's shared files and links (049). Not for clients: it holds
-    // internal systems, and the database refuses them anyway.
-    ...(!isClient ? [{ href: "/resources", label: "Resources", icon: Library, section: "menu" as const }] : []),
+    // The shared files and links (049) — everyone's, clients included (051).
+    { href: "/resources", label: "Resources", icon: Library, section: "menu" as const },
     // Everyone can see who holds which tier; only the super admin can change
     // one, which the page itself enforces.
     { href: "/access", label: "Access Levels", icon: ShieldCheck, section: "admin" as const },

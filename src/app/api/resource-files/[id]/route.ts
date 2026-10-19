@@ -9,7 +9,7 @@ const SIGNED_URL_TTL_SECONDS = 60 * 60; // 1 hour
  * A short-lived link to a library file — JSON for the preview, or with
  * `?download=1` a redirect that saves it under its original name. The same
  * shape as the project and proposal document routes, so one file list drives
- * all three. Team only (049).
+ * all three. Anyone signed in, clients too (051).
  */
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const supabase = createClient();
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   return NextResponse.json({ url: signed.signedUrl, name: file.name });
 }
 
-/** Remove a library file: whoever uploaded it, or an admin (049). */
+/** Remove a library file: anyone signed in, clients too (051). */
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const supabase = createClient();
 
@@ -67,7 +67,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
   if (!count) {
-    return NextResponse.json({ error: "You can only remove files you uploaded." }, { status: 403 });
+    return NextResponse.json({ error: "You don't have permission to remove library files." }, { status: 403 });
   }
 
   const { error: storageError } = await supabase.storage.from(RESOURCE_FILES_BUCKET).remove([file.storage_path]);
