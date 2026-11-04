@@ -12,8 +12,15 @@ import { WorkTypeToggle } from "@/components/ui/WorkTypeToggle";
 import { normaliseWorkType, type WorkType } from "@/lib/workType";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
-import { STATUS_OPTIONS, toDateInputValue } from "@/lib/utils";
+import { STATUS_OPTIONS, cn, formatMinutes, toDateInputValue } from "@/lib/utils";
 import type { CurrentUser, DailyUpdateItem, MemberItem } from "@/types";
+
+/** Quick picks for Time spent, in minutes. */
+const TIME_PRESETS = [30, 60, 120, 240, 480];
+
+/** A bare number box inside the duration control — no border, no spinner arrows. */
+const durationInput =
+  "w-12 bg-transparent py-2 pl-3 pr-1 text-right text-sm tabular-nums text-togo-white outline-none placeholder:text-togo-faint [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
 
 interface Props {
   open: boolean;
@@ -55,6 +62,9 @@ export function UpdateModal({
   const [whatsLeft, setWhatsLeft] = useState("");
   const [blockers, setBlockers] = useState("");
   const [status, setStatus] = useState("In Progress");
+  // Time spent on a project, logged as a time entry alongside the update.
+  const [hours, setHours] = useState("");
+  const [minutes, setMinutes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -84,6 +94,8 @@ export function UpdateModal({
       setBlockers("");
       setStatus("In Progress");
     }
+    setHours("");
+    setMinutes("");
     setError(null);
     syncedProject.current = editingUpdate?.project ?? null;
   }, [editingUpdate, open, currentUser.id, defaultDate]);
@@ -120,9 +132,15 @@ export function UpdateModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSaving(true);
     setError(null);
 
+    const logsTime = showTime && durationMinutes > 0;
+    if (showTime && (Number(hours) < 0 || Number(minutes) < 0 || Number(minutes) > 59 || !Number.isFinite(durationMinutes))) {
+      setError("Time spent needs hours of 0 or more and 0–59 minutes.");
+      return;
+    }
+
+    setSaving(true);
     const payload = { userId, date, project, workType, update, whatsLeft, blockers, status };
 
     try {
@@ -145,7 +163,26 @@ export function UpdateModal({
         return;
       }
 
-      toast.success(editingUpdate ? "Update saved." : "Update logged.");
+      // The update is saved by now, so a failed time entry is reported rather
+      // than kept open — saving again would log the update twice.
+      if (logsTime) {
+        const timeRes = await fetch(`/api/time-entries`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, project, workType: "project", phase: "", date, durationMinutes, note: update }),
+        });
+        if (!timeRes.ok) {
+          const data = await timeRes.json().catch(() => ({}));
+          toast.error(`Update logged, but the time wasn't — ${data.error || "add it from the project's time tracker."}`);
+          onSaved();
+          onClose();
+          return;
+        }
+      }
+
+      toast.success(
+        editingUpdate ? "Update saved." : logsTime ? `Update logged, with ${formatMinutes(durationMinutes)} on ${project.trim()}.` : "Update logged."
+      );
       onSaved();
       onClose();
     } catch {
@@ -173,6 +210,10 @@ export function UpdateModal({
   }
 
   const canPickMember = allowMemberPick && !editingUpdate;
+  // New project updates only: editing an update would log its time a second
+  // time, and a task's time isn't project time.
+  const showTime = workType === "project" && !editingUpdate;
+  const durationMinutes = Math.round((Number(hours) || 0) * 60 + (Number(minutes) || 0));
   // A row with no project and no text is noise in the tracker, so the save
   // button stays disabled until there's something worth recording.
   const canSave = project.trim() !== "" && update.trim() !== "";
@@ -278,6 +319,81 @@ export function UpdateModal({
             required
           />
         </div>
+
+        {showTime && (
+          <div>
+            <Label hint="Optional — added to the project's logged time">Time spent</Label>
+            <div className="flex flex-wrap items-center gap-3">
+              {/* One box reading "2 h 30 m", not two full-width fields: it's a
+                  single value, and the presets beside it cover most days. */}
+              <div className="flex h-[38px] items-center rounded-md border border-togo-border bg-togo-surface transition focus-within:border-togo-blue focus-within:ring-2 focus-within:ring-togo-blue">
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  inputMode="numeric"
+                  value={hours}
+                  onChange={(e) => setHours(e.target.value)}
+                  placeholder="0"
+                  aria-label="Hours spent"
+                  className={durationInput}
+                />
+                <span className="pr-3 text-xs font-medium text-togo-faint">h</span>
+                <span className="h-5 w-px bg-togo-border" aria-hidden />
+                <input
+                  type="number"
+                  min={0}
+                  max={59}
+                  step={1}
+                  inputMode="numeric"
+                  value={minutes}
+                  onChange={(e) => setMinutes(e.target.value)}
+                  placeholder="0"
+                  aria-label="Minutes spent"
+                  className={durationInput}
+                />
+                <span className="pr-3 text-xs font-medium text-togo-faint">m</span>
+              </div>
+
+              <div role="group" aria-label="Quick pick" className="flex flex-wrap items-center gap-1.5">
+                {TIME_PRESETS.map((preset) => {
+                  const active = durationMinutes === preset;
+                  return (
+                    <button
+                      key={preset}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => {
+                        setHours(String(Math.floor(preset / 60)));
+                        setMinutes(String(preset % 60));
+                      }}
+                      className={cn(
+                        "h-7 rounded-full border px-2.5 text-xs font-medium transition-colors",
+                        active
+                          ? "border-togo-blue bg-togo-blue text-white"
+                          : "border-togo-border text-togo-muted hover:border-togo-blue hover:text-togo-blue"
+                      )}
+                    >
+                      {formatMinutes(preset)}
+                    </button>
+                  );
+                })}
+                {durationMinutes > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHours("");
+                      setMinutes("");
+                    }}
+                    className="h-7 px-1.5 text-xs text-togo-faint transition-colors hover:text-togo-blue"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div>
           <Label required hint="Press Enter for a new bullet">

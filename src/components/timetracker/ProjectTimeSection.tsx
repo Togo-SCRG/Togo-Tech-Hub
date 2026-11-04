@@ -1,8 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDownUp, Play, Square, Download, Timer, Upload } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowDownUp, Play, Square, Download, Timer, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { useToast } from "@/components/ui/Toast";
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SkeletonTable } from "@/components/ui/Skeleton";
@@ -39,6 +42,10 @@ export function ProjectTimeSection({ projectName,
   const [editingEntry, setEditingEntry] = useState<TimeEntryItem | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [dataMenuOpen, setDataMenuOpen] = useState(false);
+  const [deleting, setDeleting] = useState<TimeEntryItem | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const toast = useToast();
+  const router = useRouter();
   const dataMenuRef = useRef<HTMLDivElement>(null);
 
   // Close the export/import menu on an outside click or Escape.
@@ -100,6 +107,24 @@ export function ProjectTimeSection({ projectName,
     if (!canEdit(e)) return;
     setEditingEntry(e);
     setLogModalOpen(true);
+  }
+
+  async function handleDelete() {
+    if (!deleting) return;
+    setDeleteBusy(true);
+    const res = await fetch(`/api/time-entries/${deleting.id}`, { method: "DELETE" });
+    setDeleteBusy(false);
+    if (res.ok) {
+      setEntries((prev) => prev.filter((x) => x.id !== deleting.id));
+      setDeleting(null);
+      toast.success("Time entry deleted.");
+      // The activity feed and totals beside this table are rendered on the server.
+      router.refresh();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setDeleting(null);
+      toast.error(data.error || "Couldn't delete that time entry.");
+    }
   }
 
   function openLog() {
@@ -293,6 +318,9 @@ export function ProjectTimeSection({ projectName,
                     {c.label}
                   </th>
                 ))}
+                <th scope="col" className="w-10 py-3 pl-1 pr-3">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-togo-border">
@@ -340,14 +368,12 @@ export function ProjectTimeSection({ projectName,
                       </td>
                     )}
                     {isVisible("note") && (
-                      <td className="max-w-xs px-4 py-3 text-togo-muted">
+                      <td className="px-4 py-3 text-togo-muted">
                         {e.note ? (
-                          // Clamped to three lines. An imported note is often a
-                          // whole day's work as one "- did this. - did that."
-                          // string, which made a single row taller than the rest
-                          // of the table put together. The full text is on hover,
-                          // and in the row's own modal.
-                          <span className="line-clamp-3" title={e.note}>
+                          // One short line, ending in "…", so every row is the
+                          // same height and the other columns keep their room.
+                          // The full text is on hover, and in the row's own modal.
+                          <span className="block max-w-[220px] truncate" title={e.note}>
                             {e.note}
                           </span>
                         ) : (
@@ -355,6 +381,24 @@ export function ProjectTimeSection({ projectName,
                         )}
                       </td>
                     )}
+                    <td className="w-10 py-3 pl-1 pr-3 text-right">
+                      {editable && (
+                        <button
+                          type="button"
+                          onClick={(ev) => {
+                            // The row itself opens the edit form.
+                            ev.stopPropagation();
+                            setDeleting(e);
+                          }}
+                          onKeyDown={(ev) => ev.stopPropagation()}
+                          title="Delete"
+                          aria-label={`Delete ${formatMinutes(e.durationMinutes)} entry by ${e.user.name}`}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-togo-faint transition-colors hover:bg-[var(--status-blocked-bg)] hover:text-[var(--status-blocked-fg)]"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -392,6 +436,21 @@ export function ProjectTimeSection({ projectName,
           members={members}
         />
       )}
+
+      <ConfirmDialog
+        open={!!deleting}
+        title="Delete Time Entry"
+        description={
+          deleting
+            ? `Delete ${deleting.user.name}'s ${formatMinutes(deleting.durationMinutes)} on ${formatDateShort(deleting.date)}? This can't be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        danger
+        loading={deleteBusy}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleting(null)}
+      />
 
       {canLogWork && currentUser && (
         <TimeEntryModal
