@@ -198,6 +198,19 @@ export function Sidebar({
 
         <div className={cn(collapsed ? "space-y-2" : "grid grid-cols-2 gap-2")}>
           <button
+            onClick={() => setLogoutConfirmOpen(true)}
+            title="Log out"
+            aria-label="Log out"
+            className={cn(
+              "flex items-center justify-center gap-1.5 rounded-md border border-togo-border bg-togo-surface/40 py-2 text-xs font-medium text-togo-muted transition-colors hover:border-[var(--status-blocked-fg)] hover:bg-[var(--status-blocked-bg)] hover:text-[var(--status-blocked-fg)]",
+              collapsed ? "w-full px-0" : "px-2"
+            )}
+          >
+            <LogOut size={15} className="shrink-0" />
+            {!collapsed && "Out"}
+          </button>
+
+          <button
             onClick={toggleCollapsed}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -209,19 +222,6 @@ export function Sidebar({
           >
             {collapsed ? <ChevronRight size={15} className="shrink-0" /> : <ChevronLeft size={15} className="shrink-0" />}
             {!collapsed && "Collapse"}
-          </button>
-
-          <button
-            onClick={() => setLogoutConfirmOpen(true)}
-            title="Log out"
-            aria-label="Log out"
-            className={cn(
-              "flex items-center justify-center gap-1.5 rounded-md border border-togo-border bg-togo-surface/40 py-2 text-xs font-medium text-togo-muted transition-colors hover:border-[var(--status-blocked-fg)] hover:bg-[var(--status-blocked-bg)] hover:text-[var(--status-blocked-fg)]",
-              collapsed ? "w-full px-0" : "px-2"
-            )}
-          >
-            <LogOut size={15} className="shrink-0" />
-            {!collapsed && "Out"}
           </button>
         </div>
       </div>

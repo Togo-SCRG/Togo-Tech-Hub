@@ -56,20 +56,20 @@
 .dark {
   color-scheme: dark;
 
-  /* Dark theme — Togo blue on deep navy */
-  --togo-black: #050e1a;
-  --togo-charcoal: #081322;
-  --togo-surface: #0b1a2e;
-  --togo-surface-2: #0f2240;
-  --togo-border: #0797df22;
-  --togo-border-strong: #0797df44;
+  /* Dark theme — true neutral dark, with Togo blue only as the accent */
+  --togo-black: #0a0a0a;
+  --togo-charcoal: #111111;
+  --togo-surface: #161616;
+  --togo-surface-2: #212121;
+  --togo-border: #ffffff14;
+  --togo-border-strong: #ffffff26;
   --togo-blue: #0797df;
   --togo-blue-dark: #0680be;
-  --togo-blue-muted: #123249;
-  --togo-hover: #091627;
-  --togo-white: #ffffff;
-  --togo-muted: #7ab8d9;
-  --togo-faint: #3a6a8a;
+  --togo-blue-muted: #0d2533;
+  --togo-hover: #1c1c1c;
+  --togo-white: #f5f5f5;
+  --togo-muted: #a3a3a3;
+  --togo-faint: #6b6b6b;
 
   /* Channel triplets for the colours used with Tailwind opacity modifiers
      (bg-togo-blue/10 and friends). Tailwind can only compute an alpha when the
@@ -77,12 +77,12 @@
      the modifier and emits no colour at all. Kept alongside the hex tokens,
      which plain CSS in this file still uses. */
   --togo-blue-rgb: 7 151 223;
-  --togo-surface-rgb: 11 26 46;
-  --togo-surface-2-rgb: 15 34 64;
-  --togo-charcoal-rgb: 8 19 34;
+  --togo-surface-rgb: 22 22 22;
+  --togo-surface-2-rgb: 33 33 33;
+  --togo-charcoal-rgb: 17 17 17;
 
   /* Status pill tints — dark theme */
-  --status-progress-bg: #061220;
+  --status-progress-bg: #0b1c27;
   --status-progress-border: #0797df66;
   --status-completed-bg: #061f0e;
   --status-completed-fg: #22c97a;

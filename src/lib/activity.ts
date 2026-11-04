@@ -13,6 +13,7 @@ import type { DailyUpdateItem } from "@/types";
 export interface ActivityEvent {
   id: string;
   kind: "update" | "time";
+  userId: string | null;
   userName: string;
   avatarUrl: string | null;
   date: string;
@@ -21,7 +22,10 @@ export interface ActivityEvent {
   status?: string;
   /** The row's one-line summary: the update (or its blocker), or the time note. */
   text?: string | null;
+  /** Time logged — on a time event, or on an update logged together with its time. */
   minutes?: number;
+  /** On an update: the time entries folded into it (logged in the same save). */
+  timeEntryIds?: string[];
   phase?: string | null;
   /** The whole update, for the preview a row opens. Update events only. */
   update?: DailyUpdateItem;
@@ -46,6 +50,7 @@ export function updateActivity(row: Row): ActivityEvent {
   return {
     id: row.id,
     kind: "update",
+    userId: row.user_id ?? null,
     userName,
     avatarUrl: profile?.avatar_url ?? null,
     date: row.date,
@@ -81,6 +86,7 @@ export function timeActivity(row: Row): ActivityEvent {
   return {
     id: row.id,
     kind: "time",
+    userId: row.user_id ?? null,
     userName: profile?.name || "Someone",
     avatarUrl: profile?.avatar_url ?? null,
     date: row.date,
@@ -91,7 +97,47 @@ export function timeActivity(row: Row): ActivityEvent {
   };
 }
 
-/** Newest first, by when the row was written rather than the day it's for. */
+/** How far apart an update and its time entry can be saved and still count as one. */
+const LOGGED_TOGETHER_MS = 5 * 60 * 1000;
+
+const sameText = (a?: string | null, b?: string | null) => (a ?? "").trim() === (b ?? "").trim();
+
+/**
+ * Folds each time entry that the Log Update form saved alongside an update
+ * into that update, so one save is one history row: same person, same day,
+ * same text (the form uses the update as the entry's note), written within a
+ * few minutes. Time logged separately — from the project's time tracker, or
+ * an update and time logged at different moments — stays its own row.
+ */
+function mergeLoggedTogether(events: ActivityEvent[]): ActivityEvent[] {
+  const updates = events.filter((e) => e.kind === "update");
+  const paired = new Set<ActivityEvent>();
+  const absorbed = new Set<ActivityEvent>();
+
+  for (const time of events) {
+    if (time.kind !== "time" || !time.userId) continue;
+    const match = updates.find(
+      (u) =>
+        !paired.has(u) &&
+        u.userId === time.userId &&
+        u.date === time.date &&
+        sameText(u.update?.update, time.text) &&
+        Math.abs(Date.parse(u.at) - Date.parse(time.at)) <= LOGGED_TOGETHER_MS
+    );
+    if (!match) continue;
+    paired.add(match);
+    absorbed.add(time);
+    match.minutes = (match.minutes ?? 0) + (time.minutes ?? 0);
+    match.timeEntryIds = [...(match.timeEntryIds ?? []), time.id];
+  }
+
+  return events.filter((e) => !absorbed.has(e));
+}
+
+/**
+ * Newest first, by when the row was written rather than the day it's for —
+ * with an update and the time logged in the same save shown as one row.
+ */
 export function sortActivity(events: ActivityEvent[]): ActivityEvent[] {
-  return events.sort((a, b) => b.at.localeCompare(a.at));
+  return mergeLoggedTogether(events).sort((a, b) => b.at.localeCompare(a.at));
 }
